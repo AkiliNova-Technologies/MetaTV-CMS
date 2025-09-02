@@ -12,13 +12,22 @@ export const schema = z.object({
 
 export const teamSchema = z.object({
   id: z.number(),
-  name: z.string(),
-  type: z.enum(["user", "team"]),
-  role: z.string(),
-  status: z.enum(["active", "inactive", "pending"]),
-  members: z.number(),
-  lastActive: z.string(),
-  avatarUrl: z.url,
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.email("Invalid email address"),
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  bio: z.string().optional(),
+  role: z.string().min(1, "Role is required"),
+  status: z.string().min(1, "Status is required"),
+  website: z.url("Invalid URL").optional().or(z.literal('')),
+  avatar: z.string().optional(),
+  channelDetailsName: z.string().optional(),
+  channelDescription: z.string().optional(),
+  channelBannerImage: z.string().optional(),
+  socialWebsite: z.url("Invalid URL").optional().or(z.literal('')),
+  socialFacebook: z.url("Invalid URL").optional().or(z.literal('')),
+  socialTwitter: z.url("Invalid URL").optional().or(z.literal('')),
+  lastLogin: z.string().min(1, "Last active is required"),
 });
 
 export const blogPostSchema = z.object({

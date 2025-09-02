@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   IconCamera,
   IconChartBar,
+  IconCloudDataConnection,
   IconDashboard,
   IconFileDescription,
   IconFileText,
@@ -28,11 +29,6 @@ import {
 } from "@/components/ui/sidebar";
 
 const data = {
-  user: {
-    name: "Admin",
-    email: "admin@metatv.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
   navMain: [
     {
       title: "Dashboard",
@@ -63,6 +59,11 @@ const data = {
       title: "Team",
       url: "/dashboard/team",
       icon: IconUsers, // Users for team
+    },
+    {
+      title: "Programs",
+      url: "/dashboard/programs",
+      icon: IconCloudDataConnection, // Users for team
     },
   ],
   navClouds: [
@@ -133,6 +134,7 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -155,7 +157,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser />
       </SidebarFooter>
     </Sidebar>
   );

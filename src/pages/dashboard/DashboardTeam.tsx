@@ -1,8 +1,74 @@
-import { DataTable } from "@/components/data-table";
-import { SectionCards } from "@/components/section-cards";
-import data from "@/assets/dummies/data.json";
+import { useReduxUsers } from "@/hooks/useReduxUsers";
+import { TeamTable } from "@/components/team-table";
+import React from "react";
+import { TeamSectionCards } from "@/components/team-section-cards";
 
 export default function DashboardTeam() {
+  const { users } = useReduxUsers();
+
+  const teamData = React.useMemo(() => {
+    if (!Array.isArray(users)) return [];
+
+    return users.map((user) => ({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      username: user.username,
+      role: user.role,
+      lastLogin: user.lastLogin,
+      avatarUrl: user.avatar,
+      status: user.status,
+    }));
+  }, [users]);
+
+  const cards = React.useMemo<CardData[]>(
+    () => [
+      {
+        title: "Total Members",
+        value: teamData.length,
+        trend: "up",
+        percentage: "+8%",
+        footerMain: "Growing steadily",
+        footerSub: "All users in your organization",
+      },
+      {
+        title: "Active Members",
+        value: users.filter((u) => u.status === "ACTIVE").length,
+        trend: "up",
+        percentage: "+12%",
+        footerMain: "Good engagement",
+        footerSub: "Users active this month",
+      },
+      {
+        title: "New Members",
+        value: users.filter(
+          (u) =>
+            new Date(u.createdAt) >=
+            new Date(new Date().setMonth(new Date().getMonth() - 1))
+        ).length,
+        trend: "up",
+        percentage: "+5%",
+        footerMain: "New hires onboarded",
+        footerSub: "In the last 30 days",
+      },
+      {
+        title: "Recent Logins",
+        value: users.filter(
+          (u) =>
+            u.lastLogin &&
+            new Date(u.lastLogin) >=
+              new Date(new Date().setDate(new Date().getDate() - 7))
+        ).length,
+        trend: "down",
+        percentage: "-3%",
+        footerMain: "Weekly engagement",
+        footerSub: "Users logged in past 7 days",
+      },
+    ],
+    [teamData, users]
+  );
+
   return (
     <div className="flex flex-col gap-4 py-2 md:gap-6 md:py-4">
       <div className="@container/main flex flex-1 flex-col gap-2 ">
@@ -17,8 +83,9 @@ export default function DashboardTeam() {
               </p>
             </div>
           </div>
-          <SectionCards />
-          <DataTable data={data} />
+          <TeamSectionCards cards={cards} />
+
+          <TeamTable team={teamData} />
         </div>
       </div>
     </div>

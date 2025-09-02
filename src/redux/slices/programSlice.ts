@@ -1,68 +1,68 @@
 import StorageParams from "@/constants/StorageParams";
-import type { Video } from "@/types/video";
+import type { Program } from "@/types/program";
 import api from "@/utils/api";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import localStorage from "redux-persist/es/storage";
 
-interface VideoState {
-    videos: Video[];
+interface ProgramState {
+    programs: Program[];
     loading: boolean;
     status: 'idle' | 'loading' | 'succeeded' | 'failed';
     error: string | null;
 }
 
-const initialState: VideoState = {
-    videos: [],
+const initialState: ProgramState = {
+    programs: [],
     loading: false,
     status: 'idle',
     error: null,
 };
 
-export const loadVideos = createAsyncThunk(
-    'video/loadVideos',
+export const loadPrograms = createAsyncThunk(
+    'program/loadPrograms',
     async (_,{rejectWithValue}) => {
         try {
-            const cached = await localStorage.getItem(StorageParams.CACHED_VIDEOS);
-            const cachedParsed: Video[] = cached ? JSON.parse(cached) : [];
+            const cached = await localStorage.getItem(StorageParams.CACHED_PROGRAMS);
+            const cachedParsed: Program[] = cached ? JSON.parse(cached) : [];
 
-            const response = await api.get("/videos");
-            const latest: Video[] = response.data;
+            const response = await api.get("/programs");
+            const latest: Program[] = response.data;
 
             if(JSON.stringify(cachedParsed) !== JSON.stringify(latest)) {
-                await localStorage.setItem(StorageParams.CACHED_VIDEOS, JSON.stringify(latest));
+                await localStorage.setItem(StorageParams.CACHED_PROGRAMS, JSON.stringify(latest));
                 return latest;
             }
             return cachedParsed;
         } catch {
-            return rejectWithValue("Failed to load videos");
+            return rejectWithValue("Failed to load programs");
         }
     
     }
 )
 
-const videoSlice = createSlice({
-    name:'video',
+const programSlice = createSlice({
+    name:'program',
     initialState,
     reducers: {},
     extraReducers(builder) {
         builder
-            .addCase(loadVideos.pending, (state) => {
+            .addCase(loadPrograms.pending, (state) => {
                 state.status = 'loading';
                 state.loading = true;
                 state.error = null;
             })
-            .addCase(loadVideos.fulfilled, (state, action) => {
+            .addCase(loadPrograms.fulfilled, (state, action) => {
                 state.status = 'succeeded';
                 state.loading = false;
-                state.videos = action.payload;
+                state.programs = action.payload;
             })
-            .addCase(loadVideos.rejected, (state, action) => {
+            .addCase(loadPrograms.rejected, (state, action) => {
                 state.status = 'failed';
                 state.loading = false;
-                state.videos = [];
+                state.programs = [];
                 state.error = action.payload as string;
             });
     },
 })
 
-export default videoSlice.reducer;
+export default programSlice.reducer;

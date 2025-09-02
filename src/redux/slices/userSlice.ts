@@ -1,68 +1,68 @@
 import StorageParams from "@/constants/StorageParams";
-import type { Video } from "@/types/video";
+import type { User } from "@/types/user";
 import api from "@/utils/api";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import localStorage from "redux-persist/es/storage";
 
-interface VideoState {
-    videos: Video[];
+interface UserState {
+    users: User[];
     loading: boolean;
     status: 'idle' | 'loading' | 'succeeded' | 'failed';
     error: string | null;
 }
 
-const initialState: VideoState = {
-    videos: [],
+const initialState: UserState = {
+    users: [],
     loading: false,
     status: 'idle',
     error: null,
 };
 
-export const loadVideos = createAsyncThunk(
-    'video/loadVideos',
+export const loadUsers = createAsyncThunk(
+    'user/loadUsers',
     async (_,{rejectWithValue}) => {
         try {
-            const cached = await localStorage.getItem(StorageParams.CACHED_VIDEOS);
-            const cachedParsed: Video[] = cached ? JSON.parse(cached) : [];
+            const cached = await localStorage.getItem(StorageParams.CACHED_USERS);
+            const cachedParsed: User[] = cached ? JSON.parse(cached) : [];
 
-            const response = await api.get("/videos");
-            const latest: Video[] = response.data;
+            const response = await api.get("/users");
+            const latest: User[] = response.data;
 
             if(JSON.stringify(cachedParsed) !== JSON.stringify(latest)) {
-                await localStorage.setItem(StorageParams.CACHED_VIDEOS, JSON.stringify(latest));
+                await localStorage.setItem(StorageParams.CACHED_USERS, JSON.stringify(latest));
                 return latest;
             }
             return cachedParsed;
         } catch {
-            return rejectWithValue("Failed to load videos");
+            return rejectWithValue("Failed to load users");
         }
     
     }
 )
 
-const videoSlice = createSlice({
-    name:'video',
+const userSlice = createSlice({
+    name:'user',
     initialState,
     reducers: {},
     extraReducers(builder) {
         builder
-            .addCase(loadVideos.pending, (state) => {
+            .addCase(loadUsers.pending, (state) => {
                 state.status = 'loading';
                 state.loading = true;
                 state.error = null;
             })
-            .addCase(loadVideos.fulfilled, (state, action) => {
+            .addCase(loadUsers.fulfilled, (state, action) => {
                 state.status = 'succeeded';
                 state.loading = false;
-                state.videos = action.payload;
+                state.users = action.payload;
             })
-            .addCase(loadVideos.rejected, (state, action) => {
+            .addCase(loadUsers.rejected, (state, action) => {
                 state.status = 'failed';
                 state.loading = false;
-                state.videos = [];
+                state.users = [];
                 state.error = action.payload as string;
             });
     },
 })
 
-export default videoSlice.reducer;
+export default userSlice.reducer;
