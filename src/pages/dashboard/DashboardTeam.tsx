@@ -1,7 +1,8 @@
 import { useReduxUsers } from "@/hooks/useReduxUsers";
 import { TeamTable } from "@/components/team-table";
 import React from "react";
-import { TeamSectionCards } from "@/components/team-section-cards";
+import { TeamSectionCards, type CardData } from "@/components/team-section-cards";
+
 
 export default function DashboardTeam() {
   const { users } = useReduxUsers();

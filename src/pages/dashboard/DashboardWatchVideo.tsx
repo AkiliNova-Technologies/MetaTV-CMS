@@ -7,8 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, ThumbsUp, ThumbsDown, Share2, Download, MoreHorizontal, AlertCircle } from "lucide-react";
+import { Loader2, ThumbsUp, ThumbsDown, Share2, Download, MoreHorizontal } from "lucide-react";
 import api from "@/utils/api";
 import { useReduxAuth } from "@/hooks/useReduxAuth";
 import { useReduxPrograms } from "@/hooks/useReduxPrograms";
@@ -98,7 +97,6 @@ export default function DashboardWatchVideo() {
   const [isDisliked, setIsDisliked] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [fetching, setFetching] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [commentLoading, setCommentLoading] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
 
@@ -106,7 +104,6 @@ export default function DashboardWatchVideo() {
   useEffect(() => {
     if (!videoId) {
       console.error("No videoId provided in URL");
-      setError("Invalid video ID");
       setFetching(false);
       return;
     }
@@ -144,7 +141,7 @@ export default function DashboardWatchVideo() {
         await api.get(`/videos/${videoId}/views`);
       } catch (error) {
         console.error("Failed to fetch video data:", error);
-        setError("Failed to load video");
+        message.error("Failed to load video");
       } finally {
         setFetching(false);
       }
@@ -259,26 +256,21 @@ export default function DashboardWatchVideo() {
     );
   }
 
-//   if (error || !video) {
-//     return (
-//       <div className="min-h-screen flex items-center justify-center bg-background">
-//         <Alert variant="destructive" className="max-w-md">
-//           <AlertCircle className="h-4 w-4" />
-//           <AlertTitle>Error</AlertTitle>
-//           <AlertDescription>
-//             {error || "Video not found"}
-//             <Button
-//               variant="link"
-//               onClick={() => navigate("/dashboard/videos")}
-//               className="mt-2 text-primary hover:underline"
-//             >
-//               Back to Videos
-//             </Button>
-//           </AlertDescription>
-//         </Alert>
-//       </div>
-//     );
-//   }
+  if (!video) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-foreground mb-4">Video not found</h2>
+          <Button
+            onClick={() => navigate("/dashboard/videos")}
+            className="text-primary hover:underline"
+          >
+            Back to Videos
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const programName = programs.find((p: Program) => p.id === (video.programId || video.program?.id))?.name || "Unknown";
 
@@ -294,8 +286,8 @@ export default function DashboardWatchVideo() {
               <video
                 controls
                 className="w-full h-full"
-                src={video?.videoUrl}
-                poster={video?.thumbnailUrl}
+                src={video.videoUrl}
+                poster={video.thumbnailUrl}
               >
                 Your browser does not support the video tag.
               </video>

@@ -1,9 +1,13 @@
 import { SectionCards } from "@/components/section-cards";
-import { TeamSectionCards } from "@/components/team-section-cards";
 import {
   VideoSectionCards,
-  type CardData,
+  type CardData as VideoCardData,
 } from "@/components/video-section-cards";
+import {
+  TeamSectionCards,
+  type CardData as TeamCardData,
+} from "@/components/team-section-cards";
+
 import type { videoSchema } from "@/constants/Schemas";
 import { useReduxUsers } from "@/hooks/useReduxUsers";
 import { useReduxVideos } from "@/hooks/useReduxVideos";
@@ -35,7 +39,7 @@ export default function DashboardHome() {
     }));
   }, [users]);
 
-  const videoCards = React.useMemo<CardData[]>(
+  const videoCards = React.useMemo<VideoCardData[]>(
     () => [
       {
         title: "Total Videos",
@@ -83,7 +87,7 @@ export default function DashboardHome() {
     [videos]
   );
 
-  const teamCards = React.useMemo(
+  const teamCards = React.useMemo<TeamCardData[]>(
     () => [
       {
         title: "Total Members",

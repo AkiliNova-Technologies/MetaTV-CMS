@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-type CardData = {
+export type CardData = {
   title: string
   value: string | number
   trend: "up" | "down"
