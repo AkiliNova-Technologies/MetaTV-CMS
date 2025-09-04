@@ -19,5 +19,7 @@ export interface Video {
   category: string;
   isFeatured: false;
   monetization: string;
+  allowComments: boolean;
+  codec: string;
   
 }

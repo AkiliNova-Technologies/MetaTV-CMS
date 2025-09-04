@@ -467,7 +467,7 @@ function AddMemberDrawer({
 }
 
 export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
-  const { reload: membersReload } = useReduxUsers();
+  const { loading, reload: membersReload } = useReduxUsers();
   const [data, setData] = React.useState<z.infer<typeof teamSchema>[]>(team);
   const [viewMode, setViewMode] = React.useState<"table" | "card">("table");
   const [rowSelection, setRowSelection] = React.useState({});
@@ -492,6 +492,13 @@ export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
   React.useEffect(() => {
     setData(team);
   }, [team]);
+
+  React.useMemo(() => {
+    if (!team.length) {
+      membersReload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const dataIds = React.useMemo(() => team.map(({ id }) => id), [team]);
 
@@ -607,7 +614,7 @@ export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
         cell: ({ row }) => {
           const date = new Date(row.original.lastLogin);
           if (!row.original.lastLogin) {
-            return <Label>dd/ mm/ yyyy</Label>;
+            return <Label>_</Label>;
           }
           const formatted = date.toLocaleString(undefined, {
             year: "numeric",
@@ -796,7 +803,18 @@ export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
                 ))}
               </TableHeader>
               <TableBody className="**:data-[slot=table-cell]:first:w-8">
-                {table.getRowModel().rows?.length ? (
+                {loading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={columns.length}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <IconRefresh className="size-4 animate-spin" />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : table.getRowModel().rows?.length ? (
                   <SortableContext
                     items={dataIds}
                     strategy={verticalListSortingStrategy}
@@ -817,7 +835,7 @@ export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
                           variant="ghost"
                           size="sm"
                           onClick={handleRetryFetch}
-                          className="text-sm text-primary hover:underline flex items-center gap-2"
+                          className="text-sm text-primary flex items-center gap-2"
                         >
                           <IconRefresh className="size-4" />
                           Retry

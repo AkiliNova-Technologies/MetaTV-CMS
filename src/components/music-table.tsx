@@ -34,6 +34,8 @@ import {
   IconSearch,
   //   IconFilter,
   IconX,
+  IconPlayerTrackNext,
+  IconPlayerTrackPrev,
 } from "@tabler/icons-react";
 import {
   flexRender,
@@ -108,8 +110,22 @@ import {
   Eye,
   Volume2,
   Disc3,
+  Upload,
+  Calendar,
+  Tag,
+  ImageIcon,
+  FileAudio,
 } from "lucide-react";
 import type { musicSchema } from "@/constants/Schemas";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "./ui/sheet";
+import { Textarea } from "./ui/textarea";
 
 function formatDuration(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -167,12 +183,13 @@ export function MusicCard({
   music,
   isPlaying,
   onPlayPause,
+  onEdit,
 }: {
   music: z.infer<typeof musicSchema>;
   isPlaying: boolean;
   onPlayPause: (musicId: number) => void;
+  onEdit: (music: z.infer<typeof musicSchema>) => void;
 }) {
-  const navigate = useNavigate();
   const [isImageLoading] = React.useState(true);
   const [imageError, setImageError] = React.useState(false);
 
@@ -245,9 +262,7 @@ export function MusicCard({
             <DropdownMenuItem onClick={() => onPlayPause(music.id)}>
               {isPlaying ? "Pause" : "Play"}
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => navigate(`/dashboard/music/edit/${music.id}`)}
-            >
+            <DropdownMenuItem onClick={() => onEdit(music)}>
               Edit
             </DropdownMenuItem>
             <DropdownMenuItem>Add to Playlist</DropdownMenuItem>
@@ -259,13 +274,26 @@ export function MusicCard({
   );
 }
 
-function TableCellPlayer({ music }: { music: z.infer<typeof musicSchema> }) {
-  const [isPlaying, setIsPlaying] = React.useState(false);
-  const navigate = useNavigate();
+function TableCellPlayer({
+  music,
+  onPlayPause,
+  onEdit,
+  isPlaying,
+}: {
+  music: z.infer<typeof musicSchema>;
+  onPlayPause: (musicId: number) => void;
+  onEdit: (music: z.infer<typeof musicSchema>) => void;
+  isPlaying: boolean;
+}) {
+  // const navigate = useNavigate();
 
   const handlePlayClick = () => {
-    setIsPlaying(!isPlaying);
-    // Add actual play logic here
+    onPlayPause(music.id);
+  };
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEdit(music);
   };
 
   return (
@@ -278,17 +306,25 @@ function TableCellPlayer({ music }: { music: z.infer<typeof musicSchema> }) {
       >
         {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
       </Button>
-      <div className="flex items-center gap-3">
-        
-          <div className="flex items-center justify-center w-[50px] h-[50px] bg-muted/50 rounded-md">
+      <div className="flex items-center gap-3 flex-1">
+        <div className="flex items-center justify-center w-[50px] h-[50px] bg-muted/50 rounded-md">
+          {music.thumbnailUrl ? (
+            // <img
+            //   src={music.thumbnailUrl}
+            //   alt={music.title}
+            //   className="w-full h-full object-cover rounded-md"
+            //   />
             <Disc3 className="size-8 text-muted-foreground" />
-          </div>
-        
-        <div className="min-w-0">
+          ) : (
+            <Disc3 className="size-8 text-muted-foreground" />
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
           <Button
             variant="link"
             className="text-foreground p-0 h-auto font-medium text-left justify-start hover:text-primary"
-            onClick={() => navigate(`/dashboard/music/${music.id}`)}
+            onClick={() => onEdit(music)}
           >
             {music.title}
           </Button>
@@ -296,6 +332,15 @@ function TableCellPlayer({ music }: { music: z.infer<typeof musicSchema> }) {
             {music.artist}
           </p>
         </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={handleEditClick}
+        >
+          <IconDotsVertical className="size-4" />
+        </Button>
       </div>
     </div>
   );
@@ -367,6 +412,589 @@ function DeleteMusicDialog({
   );
 }
 
+function UploadMusicDrawer({
+  onUploadSuccess,
+  music: editingMusic,
+  onClose,
+  open,
+}: {
+  onUploadSuccess: (newTrack: z.infer<typeof musicSchema>) => void;
+  music?: z.infer<typeof musicSchema> | null;
+  onClose?: () => void;
+  open?: boolean;
+}) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [isUploading, setIsUploading] = React.useState(false);
+  const [formData, setFormData] = React.useState({
+    title: editingMusic?.title || "",
+    artist: editingMusic?.artist || "",
+    audioFile: null as File | null,
+    thumbnailFile: null as File | null,
+    genre: editingMusic?.genre || ([] as string[]),
+    visibility:
+      editingMusic?.visibility ||
+      ("PUBLIC" as "PUBLIC" | "PRIVATE" | "UNLISTED"),
+    released: editingMusic?.released || "",
+    licensed: editingMusic?.licensed || "",
+  });
+  const [dragOver, setDragOver] = React.useState({
+    audio: false,
+    thumbnail: false,
+  });
+
+  const audioInputRef = React.useRef<HTMLInputElement>(null);
+  const thumbnailInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleInputChange = (field: string, value: unknown) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  React.useEffect(() => {
+    if (open !== undefined) {
+      setIsOpen(open);
+    }
+  }, [open]);
+
+  React.useEffect(() => {
+    if (editingMusic) {
+      setFormData({
+        title: editingMusic.title || "",
+        artist: editingMusic.artist || "",
+        audioFile: null,
+        thumbnailFile: null,
+        genre: editingMusic.genre || [],
+        visibility: editingMusic.visibility || "PUBLIC",
+        released: editingMusic.released || "",
+        licensed: editingMusic.licensed || "",
+      });
+    }
+  }, [editingMusic]);
+
+  const handleFileChange = (
+    field: "audioFile" | "thumbnailFile",
+    file: File | null
+  ) => {
+    setFormData((prev) => ({ ...prev, [field]: file }));
+  };
+
+  const handleDrop = (e: React.DragEvent, type: "audio" | "thumbnail") => {
+    e.preventDefault();
+    setDragOver((prev) => ({ ...prev, [type]: false }));
+
+    const files = Array.from(e.dataTransfer.files);
+    const file = files[0];
+
+    if (type === "audio" && file?.type.startsWith("audio/")) {
+      handleFileChange("audioFile", file);
+    } else if (type === "thumbnail" && file?.type.startsWith("image/")) {
+      handleFileChange("thumbnailFile", file);
+    }
+  };
+
+  const removeGenre = (genre: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      genre: prev.genre.filter((g) => g !== genre),
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title || !formData.artist || !formData.audioFile) return;
+
+    setIsUploading(true);
+    try {
+      // Simulate API call
+      const mockTrack: z.infer<typeof musicSchema> = {
+        id: Date.now(),
+        title: formData.title,
+        artist: formData.artist,
+        audioUrl: URL.createObjectURL(formData.audioFile),
+        thumbnailUrl: formData.thumbnailFile
+          ? URL.createObjectURL(formData.thumbnailFile)
+          : "",
+        duration: 180, // Mock duration
+        plays: 0,
+        genre: formData.genre,
+        visibility: formData.visibility,
+        released: formData.released || null,
+        licensed: formData.licensed || "All Rights Reserved",
+        createdAt: new Date().toISOString(),
+        uploadedBy: {
+          id: 1,
+          name: "Current User",
+        },
+        likes: [],
+      };
+
+      onUploadSuccess(mockTrack);
+      setIsOpen(false);
+      setFormData({
+        title: "",
+        artist: "",
+        audioFile: null,
+        thumbnailFile: null,
+        genre: [],
+        visibility: "PUBLIC",
+        released: "",
+        licensed: "",
+      });
+    } catch (error) {
+      console.error("Upload failed:", error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      title: "",
+      artist: "",
+      audioFile: null,
+      thumbnailFile: null,
+      genre: [],
+      visibility: "PUBLIC",
+      released: "",
+      licensed: "",
+    });
+  };
+
+  return (
+    <Sheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) {
+          resetForm();
+          onClose?.();
+        }
+      }}
+    >
+      <SheetTrigger asChild>
+        <Button variant="outline" size="sm">
+          <IconPlus />
+          <span className="hidden lg:inline">Upload Track</span>
+        </Button>
+      </SheetTrigger>
+      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetHeader className="space-y-1">
+          <SheetTitle className="flex items-center gap-2">
+            <Upload className="size-5" />
+            {editingMusic ? "Edit Track" : "Upload New Track"}
+          </SheetTitle>
+          <SheetDescription>
+            Upload your music track with all the necessary details
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex flex-col gap-4 overflow-y-auto px-6 text-sm">
+          <form onSubmit={handleSubmit} className="space-y-6 mb-8 ">
+            {/* Audio File Upload */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <FileAudio className="size-4" />
+                Audio File *
+              </Label>
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer
+                ${
+                  dragOver.audio
+                    ? "border-primary bg-primary/5"
+                    : "border-muted-foreground/25"
+                }
+                ${formData.audioFile ? "border-green-500 bg-green-50" : ""}
+              `}
+                onDrop={(e) => handleDrop(e, "audio")}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver((prev) => ({ ...prev, audio: true }));
+                }}
+                onDragLeave={() =>
+                  setDragOver((prev) => ({ ...prev, audio: false }))
+                }
+                onClick={() => audioInputRef.current?.click()}
+              >
+                <input
+                  ref={audioInputRef}
+                  type="file"
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={(e) =>
+                    handleFileChange("audioFile", e.target.files?.[0] || null)
+                  }
+                />
+                {formData.audioFile ? (
+                  <div className="text-sm text-green-600">
+                    ✓ {formData.audioFile.name}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    Drag & drop audio file here or click to browse
+                    <div className="text-xs mt-1">Supports MP3, WAV, FLAC</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Thumbnail Upload */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <ImageIcon className="size-4" />
+                Cover Image
+              </Label>
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer
+                ${
+                  dragOver.thumbnail
+                    ? "border-primary bg-primary/5"
+                    : "border-muted-foreground/25"
+                }
+                ${formData.thumbnailFile ? "border-green-500 bg-green-50" : ""}
+              `}
+                onDrop={(e) => handleDrop(e, "thumbnail")}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver((prev) => ({ ...prev, thumbnail: true }));
+                }}
+                onDragLeave={() =>
+                  setDragOver((prev) => ({ ...prev, thumbnail: false }))
+                }
+                onClick={() => thumbnailInputRef.current?.click()}
+              >
+                <input
+                  ref={thumbnailInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) =>
+                    handleFileChange(
+                      "thumbnailFile",
+                      e.target.files?.[0] || null
+                    )
+                  }
+                />
+                {formData.thumbnailFile ? (
+                  <div className="text-sm text-green-600">
+                    ✓ {formData.thumbnailFile.name}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    Drag & drop image here or click to browse
+                    <div className="text-xs mt-1">JPG, PNG, WebP</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Basic Info */}
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Track Title *</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => handleInputChange("title", e.target.value)}
+                  placeholder="Enter track title"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="artist">Artist *</Label>
+                <Input
+                  id="artist"
+                  value={formData.artist}
+                  onChange={(e) => handleInputChange("artist", e.target.value)}
+                  placeholder="Enter artist name"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Genre */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Tag className="size-4" />
+                Genres
+              </Label>
+              <Select
+                value=""
+                onValueChange={(value) => {
+                  if (value && !formData.genre.includes(value)) {
+                    setFormData((prev) => ({
+                      ...prev,
+                      genre: [...prev.genre, value],
+                    }));
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select genre(s)" />
+                </SelectTrigger>
+                <SelectContent
+                  className="grid grid-cols-2 sm:grid-cols-3 gap-1 max-h-72 overflow-auto min-w-[16rem]"
+                  style={{ minWidth: "16rem" }}
+                >
+                  {[
+                    "Pop",
+                    "Rock",
+                    "Hip-Hop",
+                    "Rap",
+                    "Electronic",
+                    "Dance",
+                    "R&B",
+                    "Soul",
+                    "Jazz",
+                    "Blues",
+                    "Classical",
+                    "Country",
+                    "Folk",
+                    "Reggae",
+                    "Metal",
+                    "Punk",
+                    "Indie",
+                    "Alternative",
+                    "Latin",
+                    "K-Pop",
+                    "Soundtrack",
+                    "Other",
+                  ].map((genre) => (
+                    <SelectItem
+                      key={genre}
+                      value={genre}
+                      className="col-span-1 whitespace-nowrap"
+                    >
+                      {genre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {formData.genre.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {formData.genre.map((genre) => (
+                    <Badge
+                      key={genre}
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      {genre}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-4 hover:bg-destructive hover:text-destructive-foreground"
+                        onClick={() => removeGenre(genre)}
+                      >
+                        <IconX className="size-3" />
+                      </Button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Visibility & Release Date */}
+            <div className="flex gap-3">
+              {/* Visibility */}
+              <div className="flex-1 space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Eye className="size-4" />
+                  Visibility
+                </Label>
+                <Select
+                  value={formData.visibility}
+                  onValueChange={(value: "PUBLIC" | "PRIVATE" | "UNLISTED") =>
+                    handleInputChange("visibility", value)
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PUBLIC">
+                      <div className="flex items-center gap-2">
+                        <Globe className="size-4" />
+                        Public
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="PRIVATE">
+                      <div className="flex items-center gap-2">
+                        <Lock className="size-4" />
+                        Private
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="UNLISTED">
+                      <div className="flex items-center gap-2">
+                        <Eye className="size-4" />
+                        Unlisted
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Release Date */}
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="released" className="flex items-center gap-2">
+                  <Calendar className="size-4" />
+                  Release Date
+                </Label>
+                <Input
+                  id="released"
+                  type="date"
+                  value={formData.released}
+                  onChange={(e) =>
+                    handleInputChange("released", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+
+            {/* License */}
+            <div className="space-y-2">
+              <Label htmlFor="licensed">License</Label>
+              <Textarea
+                id="licensed"
+                value={formData.licensed}
+                onChange={(e) => handleInputChange("licensed", e.target.value)}
+                placeholder="License information (e.g., All Rights Reserved, Creative Commons, etc.)"
+                rows={3}
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setIsOpen(false)}
+                disabled={isUploading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={
+                  !formData.title ||
+                  !formData.artist ||
+                  !formData.audioFile ||
+                  isUploading
+                }
+              >
+                {isUploading ? (
+                  <>
+                    <IconLoader className="mr-2 size-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 size-4" />
+                    Upload Track
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function MusicPlayerWidget({
+  music,
+  isPlaying,
+  onPlayPause,
+  onClose,
+  onNext,
+  onPrevious,
+  hasNext,
+  hasPrevious,
+}: {
+  music: z.infer<typeof musicSchema>;
+  isPlaying: boolean;
+  onPlayPause: () => void;
+  onClose: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}) {
+  return (
+    <div className="fixed bottom-4 right-4 z-50 w-100 bg-background border rounded-lg shadow-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-semibold">Now Playing</h4>
+        <Button variant="ghost" size="icon" onClick={onClose}>
+          <IconX className="size-4" />
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="flex-shrink-0 w-12 h-12 bg-muted rounded-md overflow-hidden">
+          {music.thumbnailUrl ? (
+            // <img
+            //   src={music.thumbnailUrl}
+            //   alt={music.title}
+            //   className="w-full h-full object-cover"
+            // />
+            <Disc3 className="w-full h-full text-muted-foreground p-2" />
+          ) : (
+            <Disc3 className="w-full h-full text-muted-foreground p-2" />
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="font-medium truncate">{music.title}</p>
+          <p className="text-sm text-muted-foreground truncate">
+            {music.artist}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Previous"
+            onClick={onPrevious}
+            disabled={!hasPrevious}
+            className={!hasPrevious ? "opacity-50" : ""}
+          >
+            <IconPlayerTrackPrev className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onPlayPause}>
+            {isPlaying ? (
+              <Pause className="size-4" />
+            ) : (
+              <Play className="size-4" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Next"
+            onClick={onNext}
+            disabled={!hasNext}
+            className={!hasNext ? "opacity-50" : ""}
+          >
+            <IconPlayerTrackNext className="size-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">0:00</span>
+        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+          <div className="h-full bg-primary" style={{ width: "0%" }}></div>
+        </div>
+        <span className="text-xs text-muted-foreground">
+          {formatDuration(music.duration)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function MusicTable({
   music,
 }: {
@@ -392,7 +1020,17 @@ export function MusicTable({
   const [currentlyPlaying, setCurrentlyPlaying] = React.useState<number | null>(
     null
   );
+  const [currentTrack, setCurrentTrack] = React.useState<z.infer<
+    typeof musicSchema
+  > | null>(null);
+  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [showPlayer, setShowPlayer] = React.useState(false);
   const [loading] = React.useState(false);
+  // const { loading } = useReduxMusic();
+
+  const [editingMusic, setEditingMusic] = React.useState<z.infer<
+    typeof musicSchema
+  > | null>(null);
 
   const sortableId = React.useId();
   const sensors = useSensors(
@@ -451,9 +1089,76 @@ export function MusicTable({
     setData((prev) => prev.filter((track) => track.id !== musicId));
   }, []);
 
-  const handlePlayPause = React.useCallback((musicId: number) => {
-    setCurrentlyPlaying((prev) => (prev === musicId ? null : musicId));
-  }, []);
+  const handlePlayPause = React.useCallback(
+    (musicId: number) => {
+      const track = data.find((t) => t.id === musicId);
+      if (track) {
+        if (currentlyPlaying === musicId) {
+          // Pause if already playing
+          setIsPlaying(false);
+          setCurrentlyPlaying(null);
+        } else {
+          // Play new track or resume
+          setCurrentTrack(track);
+          setCurrentlyPlaying(musicId);
+          setIsPlaying(true);
+          setShowPlayer(true);
+        }
+      }
+    },
+    [data, currentlyPlaying]
+  );
+
+  const hasNext = React.useMemo(() => {
+    if (!currentTrack) return false;
+    const currentIndex = filteredData.findIndex(
+      (track) => track.id === currentTrack.id
+    );
+    return currentIndex < filteredData.length - 1;
+  }, [currentTrack, filteredData]);
+
+  const hasPrevious = React.useMemo(() => {
+    if (!currentTrack) return false;
+    const currentIndex = filteredData.findIndex(
+      (track) => track.id === currentTrack.id
+    );
+    return currentIndex > 0;
+  }, [currentTrack, filteredData]);
+
+  const handleNext = React.useCallback(() => {
+    if (!currentTrack || !hasNext) return;
+
+    const currentIndex = filteredData.findIndex(
+      (track) => track.id === currentTrack.id
+    );
+    if (currentIndex < filteredData.length - 1) {
+      const nextTrack = filteredData[currentIndex + 1];
+      setCurrentTrack(nextTrack);
+      setCurrentlyPlaying(nextTrack.id);
+      setIsPlaying(true);
+    }
+  }, [currentTrack, filteredData, hasNext]);
+
+  const handlePrevious = React.useCallback(() => {
+    if (!currentTrack || !hasPrevious) return;
+
+    const currentIndex = filteredData.findIndex(
+      (track) => track.id === currentTrack.id
+    );
+    if (currentIndex > 0) {
+      const previousTrack = filteredData[currentIndex - 1];
+      setCurrentTrack(previousTrack);
+      setCurrentlyPlaying(previousTrack.id);
+      setIsPlaying(true);
+    }
+  }, [currentTrack, filteredData, hasPrevious]);
+
+  const handleUploadSuccess = React.useCallback(
+    (newTrack: z.infer<typeof musicSchema>) => {
+      setData((prev) => [newTrack, ...prev]);
+    },
+    []
+  );
 
   const columns = React.useMemo<ColumnDef<z.infer<typeof musicSchema>>[]>(
     () => [
@@ -495,7 +1200,14 @@ export function MusicTable({
       {
         id: "track",
         header: "Track",
-        cell: ({ row }) => <TableCellPlayer music={row.original} />,
+        cell: ({ row }) => (
+          <TableCellPlayer
+            music={row.original}
+            onPlayPause={handlePlayPause}
+            onEdit={setEditingMusic}
+            isPlaying={currentlyPlaying === row.original.id}
+          />
+        ),
         enableHiding: false,
         size: 300,
       },
@@ -595,11 +1307,7 @@ export function MusicTable({
               >
                 {currentlyPlaying === row.original.id ? "Pause" : "Play"}
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() =>
-                  navigate(`/dashboard/music/edit/${row.original.id}`)
-                }
-              >
+              <DropdownMenuItem onClick={() => setEditingMusic(row.original)}>
                 Edit
               </DropdownMenuItem>
               <DropdownMenuItem>Add to Playlist</DropdownMenuItem>
@@ -614,7 +1322,7 @@ export function MusicTable({
         size: 50,
       },
     ],
-    [handleDeleteMusic, handlePlayPause, currentlyPlaying, navigate]
+    [handleDeleteMusic, handlePlayPause, currentlyPlaying]
   );
 
   const table = useReactTable({
@@ -737,14 +1445,12 @@ export function MusicTable({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate("/dashboard/music/upload")}
-          >
-            <IconPlus />
-            <span className="hidden lg:inline">Upload Track</span>
-          </Button>
+          <UploadMusicDrawer
+            onUploadSuccess={handleUploadSuccess}
+            music={editingMusic}
+            onClose={() => setEditingMusic(null)}
+            open={!!editingMusic}
+          />
         </div>
       </div>
 
@@ -1046,6 +1752,7 @@ export function MusicTable({
                   music={track}
                   isPlaying={currentlyPlaying === track.id}
                   onPlayPause={handlePlayPause}
+                  onEdit={setEditingMusic}
                 />
               ))}
             </div>
@@ -1071,19 +1778,36 @@ export function MusicTable({
                         Clear filters
                       </Button>
                     )}
-                    <Button
-                      onClick={() => navigate("/dashboard/music/upload")}
-                      className="bg-primary hover:bg-primary/90"
-                    >
-                      <IconPlus className="size-4 mr-2" />
-                      Upload Track
-                    </Button>
+
+                    <UploadMusicDrawer
+                      onUploadSuccess={handleUploadSuccess}
+                      music={editingMusic}
+                      onClose={() => setEditingMusic(null)}
+                      open={!!editingMusic}
+                    />
                   </div>
                 </div>
               </div>
             )}
           </TabsContent>
         </>
+      )}
+
+      {showPlayer && currentTrack && (
+        <MusicPlayerWidget
+          music={currentTrack}
+          isPlaying={isPlaying}
+          onPlayPause={() => handlePlayPause(currentTrack.id)}
+          onClose={() => {
+            setShowPlayer(false);
+            setIsPlaying(false);
+            setCurrentlyPlaying(null);
+          }}
+          onNext={handleNext}
+          onPrevious={handlePrevious}
+          hasNext={hasNext}
+          hasPrevious={hasPrevious}
+        />
       )}
     </Tabs>
   );

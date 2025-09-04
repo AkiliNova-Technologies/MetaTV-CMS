@@ -2,54 +2,43 @@ import React from "react";
 import { useReduxVideos } from "@/hooks/useReduxVideos";
 import { VideoTable } from "@/components/video-table";
 import { VideoSectionCards } from "@/components/video-section-cards";
-// import { IconAlertCircle } from "@tabler/icons-react";
-// import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import type { videoSchema } from "@/constants/Schemas";
-import { z } from "zod";
 import type { CardData } from "@/components/video-section-cards";
 // import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Extend videoSchema to make programId optional
-type VideoTableVideo = z.infer<typeof videoSchema> & { programId?: number };
 
 export default function DashboardVideos() {
-  const { videos, loading } = useReduxVideos();
+  const { videos } = useReduxVideos();
   const [filters, setFilters] = React.useState<{ key: string; value: string | number } | null>(null);
 
-  const videoData = React.useMemo(() => {
+  // Ensure all required fields are present for VideoSectionCards and VideoTable
+  const fullVideos = React.useMemo(() => {
     if (!Array.isArray(videos)) return [];
+    return videos.map((v) => ({
+      ...v,
+      allowComments: v.allowComments ?? true,
+      codec: v.codec ?? "",
+      isFeatured: v.isFeatured ?? false,
+      monetization: v.monetization ?? "",
+      uploadedById: v.uploadedById ?? 0,
 
-    let filteredVideos = videos as VideoTableVideo[];
+    }));
+  }, [videos]);
+
+  const filteredVideos = React.useMemo(() => {
+    if (!Array.isArray(fullVideos)) return [];
+
+    let filtered = fullVideos;
     if (filters) {
       if (filters.key === "visibility") {
-        filteredVideos = videos.filter((v) => v.visibility === filters.value);
+        filtered = fullVideos.filter((v) => v.visibility === filters.value);
       } else if (filters.key === "createdAt") {
-        filteredVideos = videos.filter(
+        filtered = fullVideos.filter(
           (v) => new Date(v.createdAt) >= new Date(filters.value as string)
         );
       }
     }
-
-    return filteredVideos.map((video) => ({
-      id: video.id,
-      title: video.title,
-      description: video.description || "",
-      videoUrl: video.videoUrl,
-      thumbnailUrl: video.thumbnailUrl,
-      duration: video.duration,
-      tags: video.tags,
-      resolution: video.resolution,
-      views: video.views,
-      isApproved: video.isApproved,
-      visibility: video.visibility as "PUBLIC" | "PRIVATE" | "UNLISTED",
-      createdAt: video.createdAt,
-      format: video.format,
-      size: video.size,
-      program: video.program,
-      category: video.category,
-      programId: video.programId || video.program?.id || undefined, // Fallback to program.id or undefined
-    }));
-  }, [videos, filters]);
+    return filtered;
+  }, [fullVideos, filters]);
 
   const getTrend = (value: number): "up" | "down" => (value > 0 ? "up" : "down");
 
@@ -57,29 +46,29 @@ export default function DashboardVideos() {
     () => [
       {
         title: "Total Videos",
-        value: videos.length,
-        trend: getTrend(videos.length),
+        value: fullVideos.length,
+        trend: getTrend(fullVideos.length),
         percentage: "+8%",
         footerMain: "Growing steadily",
         footerSub: "All videos in your organization",
       },
       {
         title: "Public Videos",
-        value: videos.filter((v) => v.visibility === "PUBLIC").length,
-        trend: getTrend(videos.filter((v) => v.visibility === "PUBLIC").length),
+        value: fullVideos.filter((v) => v.visibility === "PUBLIC").length,
+        trend: getTrend(fullVideos.filter((v) => v.visibility === "PUBLIC").length),
         percentage: "+12%",
         footerMain: "Good engagement",
         footerSub: "Videos active this month",
       },
       {
         title: "New Videos",
-        value: videos.filter(
+        value: fullVideos.filter(
           (v) =>
             new Date(v.createdAt) >=
             new Date(new Date().setMonth(new Date().getMonth() - 1))
         ).length,
         trend: getTrend(
-          videos.filter(
+          fullVideos.filter(
             (v) =>
               new Date(v.createdAt) >=
               new Date(new Date().setMonth(new Date().getMonth() - 1))
@@ -91,14 +80,14 @@ export default function DashboardVideos() {
       },
       {
         title: "Total Views",
-        value: videos.reduce((acc, v) => acc + (v.views || 0), 0),
-        trend: getTrend(videos.reduce((acc, v) => acc + (v.views || 0), 0)),
+        value: fullVideos.reduce((acc, v) => acc + (v.views || 0), 0),
+        trend: getTrend(fullVideos.reduce((acc, v) => acc + (v.views || 0), 0)),
         percentage: "-3%",
         footerMain: "Weekly engagement",
         footerSub: "Total views in past 7 days",
       },
     ],
-    [videos]
+    [fullVideos]
   );
 
   const handleFilterChange = (filter: { key: string; value: string | number }) => {
@@ -132,14 +121,12 @@ export default function DashboardVideos() {
             )}
           </div>
 
-          
-              <VideoSectionCards
-                cards={cards}
-                videos={videos as VideoTableVideo[]}
-                onFilterChange={handleFilterChange}
-              />
-              <VideoTable videos={videoData} />
-          
+          <VideoSectionCards
+            cards={cards}
+            videos={fullVideos}
+            onFilterChange={handleFilterChange}
+          />
+          <VideoTable videos={filteredVideos} />
         </div>
       </div>
     </div>

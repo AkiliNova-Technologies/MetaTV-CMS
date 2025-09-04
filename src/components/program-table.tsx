@@ -34,6 +34,7 @@ import {
   IconAlertCircle,
   IconVideo,
   IconUsers,
+  IconRefresh,
 } from "@tabler/icons-react";
 import {
   flexRender,
@@ -110,7 +111,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "./ui/alert-dialog";// Import the program schema
+} from "./ui/alert-dialog"; // Import the program schema
+import { useReduxPrograms } from "@/hooks/useReduxPrograms";
 
 // Define the Program type based on your model
 type Program = z.infer<typeof programSchema> & {
@@ -174,16 +176,13 @@ function ProgramCard({ program }: { program: Program }) {
 
   return (
     <Card className="w-full">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-0">
         <div className="flex items-center gap-3">
           <div className="size-10 rounded-lg border-1 flex items-center justify-center text-white font-semibold">
             {program.name.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-sm">{program.name}</h3>
-            <p className="text-xs text-muted-foreground truncate">
-              {program.description || "No description"}
-            </p>
+            <h3 className="font-semibold text-md">{program.name}</h3>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -200,6 +199,9 @@ function ProgramCard({ program }: { program: Program }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        <p className="text-xs text-muted-foreground line-clamp-3 break-words">
+          {program.description || "No description"}
+        </p>
       </CardHeader>
       <CardContent className="pt-0">
         <div className="space-y-2">
@@ -265,8 +267,9 @@ function DeleteProgramDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Are you sure?</AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete the program{" "}
-            <span className="font-semibold">{program.name}</span> and all associated data.
+            This action cannot be undone. This will permanently delete the
+            program <span className="font-semibold">{program.name}</span> and
+            all associated data.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -332,7 +335,10 @@ function AddProgramDrawer({
           </DrawerTitle>
         </DrawerHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex flex-col gap-4"
+          >
             <div className="flex flex-col gap-3">
               <Label htmlFor="name">Program Name *</Label>
               <Input
@@ -347,7 +353,9 @@ function AddProgramDrawer({
               <Label htmlFor="description">Description</Label>
               <Textarea id="description" {...register("description")} />
               {errors.description && (
-                <p className="text-red-500 text-xs">{errors.description.message}</p>
+                <p className="text-red-500 text-xs">
+                  {errors.description.message}
+                </p>
               )}
             </div>
             <DrawerFooter className="px-0 mt-6">
@@ -369,7 +377,9 @@ function ProgramTableCellViewer({
   onUpdateProgram,
 }: {
   program: Program;
-  onUpdateProgram: (program: z.infer<typeof programSchema> & { id: number }) => void;
+  onUpdateProgram: (
+    program: z.infer<typeof programSchema> & { id: number }
+  ) => void;
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -422,7 +432,9 @@ function ProgramTableCellViewer({
       <DrawerContent className="h-full w-full max-w-md ml-auto overflow-y-auto">
         <DrawerHeader className="gap-1">
           <DrawerTitle>Edit Program</DrawerTitle>
-          <DrawerDescription>Update details for {program.name}</DrawerDescription>
+          <DrawerDescription>
+            Update details for {program.name}
+          </DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
           {error && (
@@ -432,7 +444,10 @@ function ProgramTableCellViewer({
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex flex-col gap-4"
+          >
             <div className="flex flex-col gap-3">
               <Label htmlFor="name">Program Name *</Label>
               <Input
@@ -447,7 +462,9 @@ function ProgramTableCellViewer({
               <Label htmlFor="description">Description</Label>
               <Textarea id="description" {...register("description")} />
               {errors.description && (
-                <p className="text-red-500 text-xs">{errors.description.message}</p>
+                <p className="text-red-500 text-xs">
+                  {errors.description.message}
+                </p>
               )}
             </div>
             <DrawerFooter className="px-0 mt-6">
@@ -474,11 +491,15 @@ function ProgramTableCellViewer({
 
 // Main ProgramTable Component
 export function ProgramTable({ programs }: { programs: Program[] }) {
+  const { reload: programsReload } = useReduxPrograms();
   const [data, setData] = React.useState<Program[]>(programs);
   const [viewMode, setViewMode] = React.useState<"table" | "card">("table");
   const [rowSelection, setRowSelection] = React.useState({});
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] =
+    React.useState<VisibilityState>({});
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
+    []
+  );
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
@@ -499,19 +520,33 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
   const dataIds = React.useMemo(() => programs.map(({ id }) => id), [programs]);
 
   const handleAddProgram = (newProgram: z.infer<typeof programSchema>) => {
-    setData((prev) => [...prev, { ...newProgram, videos: [], subscribers: [], createdAt: new Date().toISOString() }]);
+    setData((prev) => [
+      ...prev,
+      {
+        ...newProgram,
+        videos: [],
+        subscribers: [],
+        createdAt: new Date().toISOString(),
+      },
+    ]);
   };
 
   const handleUpdateProgram = React.useCallback(
     (updatedProgram: z.infer<typeof programSchema> & { id: number }) => {
       setData((prev) =>
         prev.map((program) =>
-          program.id === updatedProgram.id ? { ...program, ...updatedProgram } : program
+          program.id === updatedProgram.id
+            ? { ...program, ...updatedProgram }
+            : program
         )
       );
     },
     []
   );
+
+  const handleRetryFetch = async () => {
+    await programsReload();
+  };
 
   const handleDeleteProgram = React.useCallback((programId: number) => {
     setData((prev) => prev.filter((program) => program.id !== programId));
@@ -533,7 +568,9 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
                 table.getIsAllPageRowsSelected() ||
                 (table.getIsSomePageRowsSelected() && "indeterminate")
               }
-              onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+              onCheckedChange={(value) =>
+                table.toggleAllPageRowsSelected(!!value)
+              }
               aria-label="Select all"
             />
           </div>
@@ -716,14 +753,17 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
                   .getAllColumns()
                   .filter(
                     (column) =>
-                      typeof column.accessorFn !== "undefined" && column.getCanHide()
+                      typeof column.accessorFn !== "undefined" &&
+                      column.getCanHide()
                   )
                   .map((column) => (
                     <DropdownMenuCheckboxItem
                       key={column.id}
                       className="capitalize"
                       checked={column.getIsVisible()}
-                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                      onCheckedChange={(value) =>
+                        column.toggleVisibility(!!value)
+                      }
                     >
                       {column.id}
                     </DropdownMenuCheckboxItem>
@@ -735,7 +775,10 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
         </div>
       </div>
 
-      <TabsContent value="table" className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6">
+      <TabsContent
+        value="table"
+        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
+      >
         <div className="overflow-hidden rounded-lg border">
           <DndContext
             collisionDetection={closestCenter}
@@ -752,7 +795,10 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
                       <TableHead key={header.id} colSpan={header.colSpan}>
                         {header.isPlaceholder
                           ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -760,15 +806,32 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
               </TableHeader>
               <TableBody>
                 {table.getRowModel().rows?.length ? (
-                  <SortableContext items={dataIds} strategy={verticalListSortingStrategy}>
+                  <SortableContext
+                    items={dataIds}
+                    strategy={verticalListSortingStrategy}
+                  >
                     {table.getRowModel().rows.map((row) => (
                       <DraggableRow key={row.id} row={row} />
                     ))}
                   </SortableContext>
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                      No programs found.
+                    <TableCell
+                      colSpan={columns.length}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <span>No programs found.</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRetryFetch}
+                          className="text-sm text-primary flex items-center gap-2"
+                        >
+                          <IconRefresh className="size-4" />
+                          Retry
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}
@@ -776,6 +839,7 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
             </Table>
           </DndContext>
         </div>
+
         <div className="flex items-center justify-between px-4">
           <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
             {table.getFilteredSelectedRowModel().rows.length} of{" "}
@@ -791,7 +855,9 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
                 onValueChange={(value) => table.setPageSize(Number(value))}
               >
                 <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                  <SelectValue placeholder={table.getState().pagination.pageSize} />
+                  <SelectValue
+                    placeholder={table.getState().pagination.pageSize}
+                  />
                 </SelectTrigger>
                 <SelectContent side="top">
                   {[10, 20, 30, 40, 50].map((pageSize) => (
@@ -803,7 +869,8 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
               </Select>
             </div>
             <div className="flex w-fit items-center justify-center text-sm font-medium">
-              Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+              Page {table.getState().pagination.pageIndex + 1} of{" "}
+              {table.getPageCount()}
             </div>
             <div className="ml-auto flex items-center gap-2 lg:ml-0">
               <Button
