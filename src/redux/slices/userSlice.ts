@@ -26,7 +26,12 @@ export const loadUsers = createAsyncThunk(
       const cachedParsed: User[] = cached ? JSON.parse(cached) : [];
 
       const response = await api.get("/users");
-      console.log("API response:", response.data);  // <--- log here
+
+      // Log type of response for debugging
+      console.log("API response type:", typeof response.data);
+      console.log("API response:", response.data);
+
+      // Ensure latest is always an array
       const latest: User[] = Array.isArray(response.data) ? response.data : [];
 
       if (JSON.stringify(cachedParsed) !== JSON.stringify(latest)) {
@@ -34,11 +39,13 @@ export const loadUsers = createAsyncThunk(
         return latest;
       }
       return cachedParsed;
-    } catch {
+    } catch (err) {
+      console.error("Failed to load users:", err);
       return rejectWithValue("Failed to load users");
     }
   }
 );
+
 
 
 const userSlice = createSlice({
