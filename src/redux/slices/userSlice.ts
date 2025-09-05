@@ -19,26 +19,27 @@ const initialState: UserState = {
 };
 
 export const loadUsers = createAsyncThunk(
-    'user/loadUsers',
-    async (_,{rejectWithValue}) => {
-        try {
-            const cached = await localStorage.getItem(StorageParams.CACHED_USERS);
-            const cachedParsed: User[] = cached ? JSON.parse(cached) : [];
+  'user/loadUsers',
+  async (_, { rejectWithValue }) => {
+    try {
+      const cached = await localStorage.getItem(StorageParams.CACHED_USERS);
+      const cachedParsed: User[] = cached ? JSON.parse(cached) : [];
 
-            const response = await api.get("/users");
-            const latest: User[] = response.data;
+      const response = await api.get("/users");
+      console.log("API response:", response.data);  // <--- log here
+      const latest: User[] = Array.isArray(response.data) ? response.data : [];
 
-            if(JSON.stringify(cachedParsed) !== JSON.stringify(latest)) {
-                await localStorage.setItem(StorageParams.CACHED_USERS, JSON.stringify(latest));
-                return latest;
-            }
-            return cachedParsed;
-        } catch {
-            return rejectWithValue("Failed to load users");
-        }
-    
+      if (JSON.stringify(cachedParsed) !== JSON.stringify(latest)) {
+        await localStorage.setItem(StorageParams.CACHED_USERS, JSON.stringify(latest));
+        return latest;
+      }
+      return cachedParsed;
+    } catch {
+      return rejectWithValue("Failed to load users");
     }
-)
+  }
+);
+
 
 const userSlice = createSlice({
     name:'user',
