@@ -5,10 +5,12 @@ import { VideoSectionCards } from "@/components/video-section-cards";
 import type { CardData } from "@/components/video-section-cards";
 // import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
-
 export default function DashboardVideos() {
   const { videos } = useReduxVideos();
-  const [filters, setFilters] = React.useState<{ key: string; value: string | number } | null>(null);
+  const [filters, setFilters] = React.useState<{
+    key: string;
+    value: string | number;
+  } | null>(null);
 
   // Ensure all required fields are present for VideoSectionCards and VideoTable
   const fullVideos = React.useMemo(() => {
@@ -20,7 +22,6 @@ export default function DashboardVideos() {
       isFeatured: v.isFeatured ?? false,
       monetization: v.monetization ?? "",
       uploadedById: v.uploadedById ?? 0,
-
     }));
   }, [videos]);
 
@@ -40,7 +41,8 @@ export default function DashboardVideos() {
     return filtered;
   }, [fullVideos, filters]);
 
-  const getTrend = (value: number): "up" | "down" => (value > 0 ? "up" : "down");
+  const getTrend = (value: number): "up" | "down" =>
+    value > 0 ? "up" : "down";
 
   const cards = React.useMemo<CardData[]>(
     () => [
@@ -55,7 +57,9 @@ export default function DashboardVideos() {
       {
         title: "Public Videos",
         value: fullVideos.filter((v) => v.visibility === "PUBLIC").length,
-        trend: getTrend(fullVideos.filter((v) => v.visibility === "PUBLIC").length),
+        trend: getTrend(
+          fullVideos.filter((v) => v.visibility === "PUBLIC").length
+        ),
         percentage: "+12%",
         footerMain: "Good engagement",
         footerSub: "Videos active this month",
@@ -90,7 +94,10 @@ export default function DashboardVideos() {
     [fullVideos]
   );
 
-  const handleFilterChange = (filter: { key: string; value: string | number }) => {
+  const handleFilterChange = (filter: {
+    key: string;
+    value: string | number;
+  }) => {
     setFilters(filter);
   };
 
@@ -121,11 +128,14 @@ export default function DashboardVideos() {
             )}
           </div>
 
-          <VideoSectionCards
-            cards={cards}
-            videos={fullVideos}
-            onFilterChange={handleFilterChange}
-          />
+          <div className="px-6">
+            <VideoSectionCards
+              cards={cards}
+              videos={fullVideos}
+              onFilterChange={handleFilterChange}
+              layout="auto"
+            />
+          </div>
           <VideoTable videos={filteredVideos} />
         </div>
       </div>

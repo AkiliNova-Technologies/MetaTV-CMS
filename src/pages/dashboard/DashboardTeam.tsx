@@ -1,8 +1,10 @@
 import { useReduxUsers } from "@/hooks/useReduxUsers";
 import { TeamTable } from "@/components/team-table";
 import React from "react";
-import { TeamSectionCards, type CardData } from "@/components/team-section-cards";
-
+import {
+  TeamSectionCards,
+  type CardData,
+} from "@/components/team-section-cards";
 
 export default function DashboardTeam() {
   const { users } = useReduxUsers();
@@ -10,17 +12,19 @@ export default function DashboardTeam() {
   const teamData = React.useMemo(() => {
     if (!Array.isArray(users)) return [];
 
-    return users.map((user) => ({
-      id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      username: user.username,
-      role: user.role,
-      lastLogin: user.lastLogin,
-      avatarUrl: user.avatar,
-      status: user.status,
-    }));
+    return users
+      .filter((user) => user.role !== "SUPER_ADMIN")
+      .map((user) => ({
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        lastLogin: user.lastLogin,
+        avatarUrl: user.avatar,
+        status: user.status,
+      }));
   }, [users]);
 
   const cards = React.useMemo<CardData[]>(
@@ -84,7 +88,10 @@ export default function DashboardTeam() {
               </p>
             </div>
           </div>
-          <TeamSectionCards cards={cards} />
+
+          <div className="px-6">
+            <TeamSectionCards cards={cards} layout="auto" />
+          </div>
 
           <TeamTable team={teamData} />
         </div>

@@ -6,7 +6,6 @@ import {
   IconDashboard,
   IconFileDescription,
   IconFileText,
-  IconHelp,
   IconInnerShadowTop,
   IconMessage,
   IconMusic,
@@ -42,7 +41,7 @@ const data = {
     },
     {
       title: "Live Stream",
-      url: "/dashboard/live",
+      url: "/dashboard/livestream",
       icon: IconCamera, // Camera is more representative for live stream
     },
     {
@@ -121,15 +120,16 @@ const data = {
       icon: IconSettings,
     },
     {
-      title: "Get Help",
-      url: "#",
-      icon: IconHelp,
-    },
-    {
       title: "Search",
       url: "#",
       icon: IconSearch,
     },
+    // {
+    //   title: "Get Help",
+    //   url: "#",
+    //   icon: IconHelp,
+    // },
+    
   ],
 };
 

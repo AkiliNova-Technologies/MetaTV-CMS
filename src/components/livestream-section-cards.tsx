@@ -1,13 +1,11 @@
-import React from "react";
 import {
+  IconBroadcast,
+  IconClock,
+  IconEye,
   IconTrendingDown,
   IconTrendingUp,
-  IconMusic,
-  IconGlobe,
-  IconClock,
-  IconPlayerPlay,
+  IconUsers,
 } from "@tabler/icons-react";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardAction,
@@ -16,9 +14,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "./ui/badge";
 import { cn } from "@/lib/utils";
-import { z } from "zod";
-import { musicSchema } from "@/constants/Schemas";
+import type { Livestream } from "@/types/livestream";
 
 export type CardData = {
   title: string;
@@ -29,36 +27,36 @@ export type CardData = {
   footerSub: string;
 };
 
-type MusicSectionCardSong = z.infer<typeof musicSchema>;
-
-interface MusicSectionCardsProps {
+interface LivestreamSectionCardsProps {
   cards: CardData[];
-  music: MusicSectionCardSong[];
+  livestreams: Livestream[];
+  onFilterChange?: (filter: { key: string; value: string | number }) => void;
   layout?: "auto" | "2x2" | "1x1" | "4col";
 }
 
-export function MusicSectionCards({
+export function LivestreamSectionCards({
   cards,
+  onFilterChange,
   layout = "auto",
-}: MusicSectionCardsProps) {
+}: LivestreamSectionCardsProps) {
   const iconMap: {
     [key: string]: React.ComponentType<{ className?: string }>;
   } = {
-    "Total Songs": IconMusic,
-    "Public Songs": IconGlobe,
-    "New Songs": IconClock,
-    "Total Plays": IconPlayerPlay,
+    "Active Streams": IconBroadcast,
+    "Total Viewers": IconUsers,
+    "Scheduled Streams": IconClock,
+    "Total Views": IconEye,
   };
 
   // Determine grid classes based on layout prop
   const getGridClasses = () => {
     switch (layout) {
       case "2x2":
-        return "grid grid-cols-2 gap-4"; // Fixed 2x2 grid
+        return "grid grid-cols-2 gap-4";
       case "1x1":
-        return "grid grid-cols-1 gap-4"; // Single column
+        return "grid grid-cols-1 gap-4";
       case "4col":
-        return "grid grid-cols-1 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 gap-4"; // Original responsive
+        return "grid grid-cols-1 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 gap-4";
       case "auto":
       default:
         return "grid grid-cols-1 @sm/main:grid-cols-2 @xl/main:grid-cols-4 gap-4"; // Responsive default
@@ -74,16 +72,33 @@ export function MusicSectionCards({
         {displayCards.map((card, idx) => {
           const isUp = card.trend === "up";
           const TrendIcon = isUp ? IconTrendingUp : IconTrendingDown;
-          const CardIcon = iconMap[card.title] || IconMusic;
+          const CardIcon = iconMap[card.title] || IconBroadcast;
 
           return (
-            <Card key={idx} className={cn("h-full")}>
+            <Card
+              key={idx}
+              className={cn(
+                "@container/card",
+                onFilterChange &&
+                  card.title in { "Active Streams": 1, "Scheduled Streams": 1 }
+                  ? "cursor-pointer hover:shadow-md hover:bg-gray-50 dark:hover:bg-gray-800"
+                  : ""
+              )}
+              data-slot="card"
+              onClick={
+                onFilterChange && card.title === "Active Streams"
+                  ? () => onFilterChange({ key: "status", value: "LIVE" })
+                  : onFilterChange && card.title === "Scheduled Streams"
+                  ? () => onFilterChange({ key: "status", value: "SCHEDULED" })
+                  : undefined
+              }
+            >
               <CardHeader>
                 <CardDescription className="flex items-center gap-2">
                   <CardIcon className="size-4" />
                   {card.title}
                 </CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums">
+                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                   {card.value}
                 </CardTitle>
                 {card.trend && card.percentage && (
@@ -99,7 +114,7 @@ export function MusicSectionCards({
                 )}
               </CardHeader>
               <CardFooter className="flex-col items-start gap-1.5 text-sm">
-                <div className="flex gap-2 font-medium">
+                <div className="line-clamp-1 flex gap-2 font-medium">
                   {card.footerMain}
                   {card.trend && <TrendIcon className="size-4" />}
                 </div>

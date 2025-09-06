@@ -113,6 +113,13 @@ import {
   AlertDialogTrigger,
 } from "./ui/alert-dialog"; // Import the program schema
 import { useReduxPrograms } from "@/hooks/useReduxPrograms";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "./ui/sheet";
 
 // Define the Program type based on your model
 type Program = z.infer<typeof programSchema> & {
@@ -295,12 +302,23 @@ function DeleteProgramDialog({
 }
 
 // Add Program Drawer
-function AddProgramDrawer({
+export function AddProgramDrawer({
   onAddProgram,
+  showTrigger = true,
+  open,
+  onOpenChange,
 }: {
   onAddProgram: (program: z.infer<typeof programSchema>) => void;
+  showTrigger?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
+
   const {
     register,
     handleSubmit,
@@ -319,22 +337,28 @@ function AddProgramDrawer({
     }
   };
 
+  const closeDrawer = () => setIsOpen(false);
+
   return (
-    <Drawer open={isOpen} onOpenChange={setIsOpen} direction="right">
-      <DrawerTrigger asChild>
-        <Button variant="outline" size="sm">
-          <IconPlus />
-          <span className="hidden lg:inline">Add Program</span>
-        </Button>
-      </DrawerTrigger>
-      <DrawerContent className="h-full w-full max-w-md ml-auto overflow-y-auto">
-        <DrawerHeader className="gap-1">
-          <DrawerTitle className="flex items-center gap-2">
+    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      {showTrigger && (
+        <SheetTrigger asChild>
+          <Button variant="outline" size="sm">
+            <IconPlus />
+            <span className="hidden lg:inline">Add Program</span>
+          </Button>
+        </SheetTrigger>
+      )}
+
+      <SheetContent className="w-full sm:max-w-md overflow-y-auto" side="right">
+        <SheetHeader className="space-y-1">
+          <SheetTitle className="flex items-center gap-2">
             <IconTable className="size-5" />
             Add New Program
-          </DrawerTitle>
-        </DrawerHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
+          </SheetTitle>
+        </SheetHeader>
+
+        <div className="flex flex-col gap-4 overflow-y-auto px-6 text-sm mt-6">
           <form
             onSubmit={handleSubmit(onSubmit)}
             className="flex flex-col gap-4"
@@ -342,6 +366,7 @@ function AddProgramDrawer({
             <div className="flex flex-col gap-3">
               <Label htmlFor="name">Program Name *</Label>
               <Input
+                placeholder="program name"
                 id="name"
                 {...register("name", { required: "Program name is required" })}
               />
@@ -349,25 +374,38 @@ function AddProgramDrawer({
                 <p className="text-red-500 text-xs">{errors.name.message}</p>
               )}
             </div>
+
             <div className="flex flex-col gap-3">
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" {...register("description")} />
+              <Textarea
+                placeholder="description"
+                id="description"
+                {...register("description")}
+              />
               {errors.description && (
                 <p className="text-red-500 text-xs">
                   {errors.description.message}
                 </p>
               )}
             </div>
-            <DrawerFooter className="px-0 mt-6">
-              <Button type="submit">Add Program</Button>
-              <DrawerClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DrawerClose>
-            </DrawerFooter>
+
+            <div className="flex gap-3 pt-4 border-t mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={closeDrawer}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1">
+                Add Program
+              </Button>
+            </div>
           </form>
         </div>
-      </DrawerContent>
-    </Drawer>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -491,7 +529,7 @@ function ProgramTableCellViewer({
 
 // Main ProgramTable Component
 export function ProgramTable({ programs }: { programs: Program[] }) {
-  const { reload: programsReload } = useReduxPrograms();
+  const { programs: programData, reload: programsReload } = useReduxPrograms();
   const [data, setData] = React.useState<Program[]>(programs);
   const [viewMode, setViewMode] = React.useState<"table" | "card">("table");
   const [rowSelection, setRowSelection] = React.useState({});
@@ -516,6 +554,13 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
   React.useEffect(() => {
     setData(programs);
   }, [programs]);
+
+  React.useMemo(() => {
+    if (!programData.length) {
+      programsReload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const dataIds = React.useMemo(() => programs.map(({ id }) => id), [programs]);
 

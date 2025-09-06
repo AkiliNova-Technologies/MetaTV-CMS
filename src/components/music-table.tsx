@@ -56,7 +56,6 @@ import type {
   ColumnFiltersState,
 } from "@tanstack/react-table";
 import { z } from "zod";
-import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,11 +125,14 @@ import {
   SheetTrigger,
 } from "./ui/sheet";
 import { Textarea } from "./ui/textarea";
+import { useReduxMusic } from "@/hooks/useReduxMusic";
+import { toast } from "sonner";
+import { useReduxAuth } from "@/hooks/useReduxAuth";
 
-function formatDuration(seconds: number) {
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${minutes}:${secs.toString().padStart(2, "0")}`;
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
 function formatPlays(plays: number) {
@@ -205,17 +207,17 @@ export function MusicCard({
         className="relative flex-shrink-0 w-[70px] h-[70px] rounded-md overflow-hidden bg-muted cursor-pointer group"
         onClick={handlePlayClick}
       >
-        {!music.thumbnailUrl || imageError || isImageLoading ? (
-          <div className="flex items-center justify-center w-full h-full bg-muted/50">
-            <Disc3 className="size-8 text-muted-foreground" />
-          </div>
-        ) : (
+        {music.thumbnailUrl || imageError || isImageLoading ? (
           <img
             src={music.thumbnailUrl}
             alt={`${music.title} cover`}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
             onError={() => setImageError(true)}
           />
+        ) : (
+          <div className="flex items-center justify-center w-full h-full bg-muted/50">
+            <Disc3 className="size-8 text-muted-foreground" />
+          </div>
         )}
 
         {/* Play / Pause Overlay */}
@@ -309,13 +311,13 @@ function TableCellPlayer({
       <div className="flex items-center gap-3 flex-1">
         <div className="flex items-center justify-center w-[50px] h-[50px] bg-muted/50 rounded-md">
           {music.thumbnailUrl ? (
-            // <img
-            //   src={music.thumbnailUrl}
-            //   alt={music.title}
-            //   className="w-full h-full object-cover rounded-md"
-            //   />
-            <Disc3 className="size-8 text-muted-foreground" />
+            <img
+              src={music.thumbnailUrl}
+              alt={music.title}
+              className="w-full h-full object-cover rounded-md"
+            />
           ) : (
+            // <Disc3 className="size-8 text-muted-foreground" />
             <Disc3 className="size-8 text-muted-foreground" />
           )}
         </div>
@@ -412,17 +414,20 @@ function DeleteMusicDialog({
   );
 }
 
-function UploadMusicDrawer({
+export function UploadMusicDrawer({
   onUploadSuccess,
   music: editingMusic,
   onClose,
   open,
+  showTrigger = true,
 }: {
   onUploadSuccess: (newTrack: z.infer<typeof musicSchema>) => void;
   music?: z.infer<typeof musicSchema> | null;
   onClose?: () => void;
   open?: boolean;
+  showTrigger?: boolean;
 }) {
+  const { user } = useReduxAuth();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
   const [formData, setFormData] = React.useState({
@@ -434,7 +439,9 @@ function UploadMusicDrawer({
     visibility:
       editingMusic?.visibility ||
       ("PUBLIC" as "PUBLIC" | "PRIVATE" | "UNLISTED"),
-    released: editingMusic?.released || "",
+    released: editingMusic?.released
+      ? new Date(editingMusic.released).toISOString().split("T")[0]
+      : "",
     licensed: editingMusic?.licensed || "",
   });
   const [dragOver, setDragOver] = React.useState({
@@ -464,7 +471,9 @@ function UploadMusicDrawer({
         thumbnailFile: null,
         genre: editingMusic.genre || [],
         visibility: editingMusic.visibility || "PUBLIC",
-        released: editingMusic.released || "",
+        released: editingMusic.released
+          ? new Date(editingMusic.released).toISOString().split("T")[0]
+          : "",
         licensed: editingMusic.licensed || "",
       });
     }
@@ -498,49 +507,83 @@ function UploadMusicDrawer({
     }));
   };
 
+  const extractAudioDuration = (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      const audio = new Audio();
+      const objectUrl = URL.createObjectURL(file);
+
+      audio.addEventListener("loadedmetadata", () => {
+        const duration = Math.round(audio.duration);
+        URL.revokeObjectURL(objectUrl);
+        resolve(duration);
+      });
+
+      audio.addEventListener("error", () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(0); // Fallback to 0 if extraction fails
+      });
+
+      audio.src = objectUrl;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.artist || !formData.audioFile) return;
+    if (!formData.title || !formData.artist) return;
+
+    // For updates, audio file is optional; for new uploads, it's required
+    if (!editingMusic && !formData.audioFile) return;
 
     setIsUploading(true);
     try {
-      // Simulate API call
-      const mockTrack: z.infer<typeof musicSchema> = {
-        id: Date.now(),
-        title: formData.title,
-        artist: formData.artist,
-        audioUrl: URL.createObjectURL(formData.audioFile),
-        thumbnailUrl: formData.thumbnailFile
-          ? URL.createObjectURL(formData.thumbnailFile)
-          : "",
-        duration: 180, // Mock duration
-        plays: 0,
-        genre: formData.genre,
-        visibility: formData.visibility,
-        released: formData.released || null,
-        licensed: formData.licensed || "All Rights Reserved",
-        createdAt: new Date().toISOString(),
-        uploadedBy: {
-          id: 1,
-          name: "Current User",
-        },
-        likes: [],
-      };
+      const formDataToSend = new FormData();
+      formDataToSend.append("title", formData.title);
+      formDataToSend.append("artist", formData.artist);
+      formDataToSend.append("visibility", formData.visibility);
+      formDataToSend.append("licensed", formData.licensed);
+      formDataToSend.append("genre", JSON.stringify(formData.genre));
 
-      onUploadSuccess(mockTrack);
+      // Add the user ID from auth
+      if (user?.id) {
+        formDataToSend.append("uploadedById", user.id.toString());
+      }
+
+      if (formData.released) {
+        formDataToSend.append("released", formData.released);
+      }
+
+      // Extract duration on the frontend
+      if (formData.audioFile) {
+        const duration = await extractAudioDuration(formData.audioFile);
+        formDataToSend.append("duration", duration.toString());
+        formDataToSend.append("music", formData.audioFile);
+      }
+
+      if (formData.thumbnailFile) {
+        formDataToSend.append("thumbnail", formData.thumbnailFile);
+      }
+
+      let response;
+
+      if (editingMusic) {
+        // Update existing music
+        response = await api.put(`/music/${editingMusic.id}`, formDataToSend);
+      } else {
+        // Create new music
+        response = await api.post("/music", formDataToSend);
+      }
+
+      onUploadSuccess(response.data);
+      toast.success("Song uploaded successfully!");
       setIsOpen(false);
-      setFormData({
-        title: "",
-        artist: "",
-        audioFile: null,
-        thumbnailFile: null,
-        genre: [],
-        visibility: "PUBLIC",
-        released: "",
-        licensed: "",
-      });
+      resetForm();
     } catch (error) {
       console.error("Upload failed:", error);
+
+      // Provide user-friendly error messages
+      const errorMessage = "An error occurred during upload";
+
+      toast.error(errorMessage);
     } finally {
       setIsUploading(false);
     }
@@ -559,23 +602,26 @@ function UploadMusicDrawer({
     });
   };
 
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (!open) {
+      resetForm();
+      onClose?.();
+    }
+  };
+
   return (
-    <Sheet
-      open={isOpen}
-      onOpenChange={(open) => {
-        setIsOpen(open);
-        if (!open) {
-          resetForm();
-          onClose?.();
-        }
-      }}
-    >
-      <SheetTrigger asChild>
-        <Button variant="outline" size="sm">
-          <IconPlus />
-          <span className="hidden lg:inline">Upload Track</span>
-        </Button>
-      </SheetTrigger>
+    <Sheet open={isOpen} onOpenChange={handleOpenChange}>
+      {showTrigger && (
+        <SheetTrigger asChild>
+          <Button variant="outline" size="sm">
+            <IconPlus />
+            <span className="hidden lg:inline">
+              {editingMusic ? "Edit Track" : "Upload Track"}
+            </span>
+          </Button>
+        </SheetTrigger>
+      )}
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader className="space-y-1">
           <SheetTitle className="flex items-center gap-2">
@@ -583,27 +629,28 @@ function UploadMusicDrawer({
             {editingMusic ? "Edit Track" : "Upload New Track"}
           </SheetTitle>
           <SheetDescription>
-            Upload your music track with all the necessary details
+            {editingMusic
+              ? "Update your music track details"
+              : "Upload your music track with all the necessary details"}
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex flex-col gap-4 overflow-y-auto px-6 text-sm">
-          <form onSubmit={handleSubmit} className="space-y-6 mb-8 ">
+          <form onSubmit={handleSubmit} className="space-y-6 mb-8">
             {/* Audio File Upload */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <FileAudio className="size-4" />
-                Audio File *
+                Audio File {!editingMusic && "*"}
               </Label>
               <div
                 className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer
-                ${
-                  dragOver.audio
-                    ? "border-primary bg-primary/5"
-                    : "border-muted-foreground/25"
-                }
-                ${formData.audioFile ? "border-green-500 bg-green-50" : ""}
-              `}
+      ${
+        dragOver.audio
+          ? "border-primary bg-primary/5"
+          : "border-muted-foreground/25"
+      }
+    `}
                 onDrop={(e) => handleDrop(e, "audio")}
                 onDragOver={(e) => {
                   e.preventDefault();
@@ -623,17 +670,41 @@ function UploadMusicDrawer({
                     handleFileChange("audioFile", e.target.files?.[0] || null)
                   }
                 />
-                {formData.audioFile ? (
-                  <div className="text-sm text-green-600">
-                    ✓ {formData.audioFile.name}
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    Drag & drop audio file here or click to browse
-                    <div className="text-xs mt-1">Supports MP3, WAV, FLAC</div>
-                  </div>
-                )}
+                <div className="text-sm text-muted-foreground">
+                  <Upload className="mx-auto size-6 mb-2" />
+                  Drag & drop audio file here or click to browse
+                  <div className="text-xs mt-1">Supports MP3, WAV, FLAC</div>
+                </div>
               </div>
+
+              {/* File info and remove button */}
+              {formData.audioFile && (
+                <div className="flex items-center space-x-2 mt-2 max-w-2xs text-foreground truncate p-2 bg-muted rounded-md">
+                  <FileAudio className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate flex-1">
+                    {formData.audioFile.name}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    type="button"
+                    onClick={() => handleFileChange("audioFile", null)}
+                    className="size-6 hover:bg-destructive hover:text-destructive-foreground"
+                  >
+                    <IconX className="size-3" />
+                  </Button>
+                </div>
+              )}
+
+              {/* Show existing audio file info when editing */}
+              {editingMusic && !formData.audioFile && (
+                <div className="flex items-center space-x-2 mt-2 max-w-xs text-muted-foreground truncate p-2 bg-muted rounded-md">
+                  <FileAudio className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate flex-1">
+                    Using existing audio file
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Thumbnail Upload */}
@@ -644,12 +715,11 @@ function UploadMusicDrawer({
               </Label>
               <div
                 className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer
-                ${
-                  dragOver.thumbnail
-                    ? "border-primary bg-primary/5"
-                    : "border-muted-foreground/25"
-                }
-                ${formData.thumbnailFile ? "border-green-500 bg-green-50" : ""}
+              ${
+                dragOver.thumbnail
+                  ? "border-primary bg-primary/5"
+                  : "border-muted-foreground/25"
+              }
               `}
                 onDrop={(e) => handleDrop(e, "thumbnail")}
                 onDragOver={(e) => {
@@ -673,17 +743,43 @@ function UploadMusicDrawer({
                     )
                   }
                 />
-                {formData.thumbnailFile ? (
-                  <div className="text-sm text-green-600">
-                    ✓ {formData.thumbnailFile.name}
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    Drag & drop image here or click to browse
-                    <div className="text-xs mt-1">JPG, PNG, WebP</div>
+                <div className="text-sm text-muted-foreground">
+                  <Upload className="mx-auto size-6 mb-2" />
+                  Drag & drop image here or click to browse
+                  <div className="text-xs mt-1">JPG, PNG, WebP</div>
+                </div>
+              </div>
+
+              {/* File info and remove button */}
+              {formData.thumbnailFile && (
+                <div className="flex items-center space-x-2 mt-2 max-w-xs text-foreground truncate p-2 bg-muted rounded-md">
+                  <ImageIcon className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate flex-1">
+                    {formData.thumbnailFile.name}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    type="button"
+                    onClick={() => handleFileChange("thumbnailFile", null)}
+                    className="size-6 hover:bg-destructive hover:text-destructive-foreground"
+                  >
+                    <IconX className="size-4" />
+                  </Button>
+                </div>
+              )}
+
+              {/* Show existing thumbnail info when editing */}
+              {editingMusic &&
+                !formData.thumbnailFile &&
+                editingMusic.thumbnailUrl && (
+                  <div className="flex items-center space-x-2 mt-2 max-w-xs text-muted-foreground truncate p-2 bg-muted rounded-md">
+                    <ImageIcon className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate flex-1">
+                      Using existing thumbnail
+                    </span>
                   </div>
                 )}
-              </div>
             </div>
 
             {/* Basic Info */}
@@ -735,35 +831,24 @@ function UploadMusicDrawer({
                   style={{ minWidth: "16rem" }}
                 >
                   {[
-                    "Pop",
-                    "Rock",
-                    "Hip-Hop",
-                    "Rap",
-                    "Electronic",
-                    "Dance",
-                    "R&B",
-                    "Soul",
-                    "Jazz",
-                    "Blues",
-                    "Classical",
-                    "Country",
-                    "Folk",
-                    "Reggae",
-                    "Metal",
-                    "Punk",
-                    "Indie",
-                    "Alternative",
-                    "Latin",
-                    "K-Pop",
-                    "Soundtrack",
-                    "Other",
+                    "POP",
+                    "HIPHOP",
+                    "JAZZ",
+                    "ROCK",
+                    "CLASSICAL",
+                    "GOSPEL",
+                    "OTHER",
                   ].map((genre) => (
                     <SelectItem
                       key={genre}
                       value={genre}
                       className="col-span-1 whitespace-nowrap"
                     >
-                      {genre}
+                      {genre === "HIPHOP"
+                        ? "Hip Hop"
+                        : genre === "GOSPEL"
+                        ? "Gospel"
+                        : genre.charAt(0) + genre.slice(1).toLowerCase()}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -878,19 +963,19 @@ function UploadMusicDrawer({
                 disabled={
                   !formData.title ||
                   !formData.artist ||
-                  !formData.audioFile ||
+                  (!editingMusic && !formData.audioFile) ||
                   isUploading
                 }
               >
                 {isUploading ? (
                   <>
                     <IconLoader className="mr-2 size-4 animate-spin" />
-                    Uploading...
+                    {editingMusic ? "Updating..." : "Uploading..."}
                   </>
                 ) : (
                   <>
                     <Upload className="mr-2 size-4" />
-                    Upload Track
+                    {editingMusic ? "Update Track" : "Upload Track"}
                   </>
                 )}
               </Button>
@@ -911,6 +996,7 @@ function MusicPlayerWidget({
   onPrevious,
   hasNext,
   hasPrevious,
+  audioElement,
 }: {
   music: z.infer<typeof musicSchema>;
   isPlaying: boolean;
@@ -920,78 +1006,155 @@ function MusicPlayerWidget({
   onPrevious: () => void;
   hasNext: boolean;
   hasPrevious: boolean;
+  audioElement: HTMLAudioElement | null;
 }) {
+  const [currentTime, setCurrentTime] = React.useState(0);
+  const [duration, setDuration] = React.useState(music.duration || 0);
+
+  // Set up audio event listeners once
+  React.useEffect(() => {
+    if (!audioElement) return;
+
+    const updateTime = () => setCurrentTime(audioElement.currentTime);
+    const updateDuration = () =>
+      setDuration(audioElement.duration || music.duration || 0);
+
+    audioElement.addEventListener("timeupdate", updateTime);
+    audioElement.addEventListener("loadedmetadata", updateDuration);
+
+    return () => {
+      audioElement.removeEventListener("timeupdate", updateTime);
+      audioElement.removeEventListener("loadedmetadata", updateDuration);
+    };
+  }, [audioElement, music.duration]);
+
+  // Handle track changes - only update source when track changes
+  React.useEffect(() => {
+    if (!audioElement) return;
+
+    // Only change source if it's a different track
+    if (audioElement.src !== music.audioUrl) {
+      audioElement.src = music.audioUrl;
+      audioElement.load();
+
+      // Auto-play when track changes
+      if (isPlaying) {
+        audioElement.play().catch(console.error);
+      }
+    }
+  }, [music.audioUrl, audioElement, isPlaying]);
+
+  // Handle play/pause
+  React.useEffect(() => {
+    if (!audioElement) return;
+
+    if (isPlaying) {
+      audioElement.play().catch(console.error);
+    } else {
+      audioElement.pause();
+    }
+  }, [isPlaying, audioElement]);
+
+  // Handle seeking
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!audioElement) return;
+
+    const progressBar = e.currentTarget;
+    const rect = progressBar.getBoundingClientRect();
+    const seekPosition = (e.clientX - rect.left) / rect.width;
+    const seekTime = seekPosition * duration;
+
+    audioElement.currentTime = seekTime;
+    setCurrentTime(seekTime);
+  };
+
+  // Calculate progress percentage
+  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-100 bg-background border rounded-lg shadow-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="font-semibold">Now Playing</h4>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <IconX className="size-4" />
-        </Button>
-      </div>
+    <>
+      {/* Hidden audio element */}
+      {/* <audio ref={audioElement} preload="metadata" /> */}
 
-      <div className="flex items-center gap-3">
-        <div className="flex-shrink-0 w-12 h-12 bg-muted rounded-md overflow-hidden">
-          {music.thumbnailUrl ? (
-            // <img
-            //   src={music.thumbnailUrl}
-            //   alt={music.title}
-            //   className="w-full h-full object-cover"
-            // />
-            <Disc3 className="w-full h-full text-muted-foreground p-2" />
-          ) : (
-            <Disc3 className="w-full h-full text-muted-foreground p-2" />
-          )}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <p className="font-medium truncate">{music.title}</p>
-          <p className="text-sm text-muted-foreground truncate">
-            {music.artist}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Previous"
-            onClick={onPrevious}
-            disabled={!hasPrevious}
-            className={!hasPrevious ? "opacity-50" : ""}
-          >
-            <IconPlayerTrackPrev className="size-4" />
+      {/* Player widget */}
+      <div className="fixed bottom-4 right-4 z-50 w-100 bg-background border rounded-lg shadow-lg p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold">Now Playing</h4>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <IconX className="size-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={onPlayPause}>
-            {isPlaying ? (
-              <Pause className="size-4" />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-12 h-12 bg-muted rounded-md overflow-hidden">
+            {music.thumbnailUrl ? (
+              <img
+                src={music.thumbnailUrl}
+                alt={music.title}
+                className="w-full h-full object-cover"
+              />
             ) : (
-              <Play className="size-4" />
+              <Disc3 className="w-full h-full text-muted-foreground p-2" />
             )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Next"
-            onClick={onNext}
-            disabled={!hasNext}
-            className={!hasNext ? "opacity-50" : ""}
-          >
-            <IconPlayerTrackNext className="size-4" />
-          </Button>
-        </div>
-      </div>
+          </div>
 
-      <div className="mt-3 flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">0:00</span>
-        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
-          <div className="h-full bg-primary" style={{ width: "0%" }}></div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium truncate">{music.title}</p>
+            <p className="text-sm text-muted-foreground truncate">
+              {music.artist}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Previous"
+              onClick={onPrevious}
+              disabled={!hasPrevious}
+              className={!hasPrevious ? "opacity-50" : ""}
+            >
+              <IconPlayerTrackPrev className="size-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onPlayPause}>
+              {isPlaying ? (
+                <Pause className="size-4" />
+              ) : (
+                <Play className="size-4" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Next"
+              onClick={onNext}
+              disabled={!hasNext}
+              className={!hasNext ? "opacity-50" : ""}
+            >
+              <IconPlayerTrackNext className="size-4" />
+            </Button>
+          </div>
         </div>
-        <span className="text-xs text-muted-foreground">
-          {formatDuration(music.duration)}
-        </span>
+
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-10">
+            {formatDuration(currentTime)}
+          </span>
+          <div
+            className="flex-1 h-1 bg-muted rounded-full overflow-hidden cursor-pointer"
+            onClick={handleSeek}
+          >
+            <div
+              className="h-full bg-primary transition-all duration-150"
+              style={{ width: `${progressPercentage}%` }}
+            />
+          </div>
+          <span className="text-xs text-muted-foreground w-10">
+            {formatDuration(duration)}
+          </span>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -1000,7 +1163,8 @@ export function MusicTable({
 }: {
   music: z.infer<typeof musicSchema>[];
 }) {
-  const navigate = useNavigate();
+  const { music: musicData, reload: musicReload } = useReduxMusic();
+  const audioRef = React.useRef<HTMLAudioElement>(null);
   const [data, setData] = React.useState<z.infer<typeof musicSchema>[]>(music);
   const [viewMode, setViewMode] = React.useState<"table" | "card">("table");
   const [rowSelection, setRowSelection] = React.useState({});
@@ -1025,8 +1189,7 @@ export function MusicTable({
   > | null>(null);
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [showPlayer, setShowPlayer] = React.useState(false);
-  const [loading] = React.useState(false);
-  // const { loading } = useReduxMusic();
+  const { loading } = useReduxMusic();
 
   const [editingMusic, setEditingMusic] = React.useState<z.infer<
     typeof musicSchema
@@ -1042,6 +1205,29 @@ export function MusicTable({
   React.useEffect(() => {
     setData(music);
   }, [music]);
+
+  React.useEffect(() => {
+    if (!audioRef.current) {
+      const audio = new Audio();
+      audioRef.current = audio;
+    }
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
+    };
+  }, []);
+
+  React.useMemo(() => {
+    if (!musicData.length) {
+      musicReload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const dataIds = React.useMemo(() => music.map((track) => track.id), [music]);
 
@@ -1573,13 +1759,8 @@ export function MusicTable({
         )}
       </div>
 
-      {loading && (
-        <div className="flex items-center justify-center h-32 mx-4 lg:mx-6">
-          <IconLoader className="animate-spin size-8 text-muted-foreground" />
-        </div>
-      )}
 
-      {!loading && (
+      
         <>
           <TabsContent
             value="table"
@@ -1620,6 +1801,17 @@ export function MusicTable({
                           <DraggableRow key={row.id} row={row} />
                         ))}
                       </SortableContext>
+                    ) : loading ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={columns.length}
+                          className="h-24 text-center text-muted-foreground"
+                        >
+                          <div className="flex flex-col items-center gap-2">
+                            <IconLoader className="animate-spin size-8 text-muted-foreground" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
                     ) : (
                       <TableRow>
                         <TableCell
@@ -1627,29 +1819,7 @@ export function MusicTable({
                           className="h-24 text-center text-muted-foreground"
                         >
                           <div className="flex flex-col items-center gap-2">
-                            <Music className="size-12 text-muted-foreground/50" />
                             <span>No tracks found.</span>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={clearFilters}
-                                className="text-sm text-primary hover:underline"
-                              >
-                                Clear filters
-                              </Button>
-                              <span className="text-muted-foreground">or</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  navigate("/dashboard/music/upload")
-                                }
-                                className="text-sm text-primary hover:underline"
-                              >
-                                Upload your first track
-                              </Button>
-                            </div>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1791,7 +1961,7 @@ export function MusicTable({
             )}
           </TabsContent>
         </>
-      )}
+      
 
       {showPlayer && currentTrack && (
         <MusicPlayerWidget
@@ -1807,6 +1977,7 @@ export function MusicTable({
           onPrevious={handlePrevious}
           hasNext={hasNext}
           hasPrevious={hasPrevious}
+          audioElement={audioRef.current}
         />
       )}
     </Tabs>

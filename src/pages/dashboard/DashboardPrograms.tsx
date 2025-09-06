@@ -69,7 +69,7 @@ export default function DashboardPrograms() {
         title: "Recent Programs",
         value: recentPrograms,
         trend: getTrend(recentPrograms),
-        percentage: recentPrograms > 0 ? "+3%" : "-2%", 
+        percentage: recentPrograms > 0 ? "+3%" : "-2%",
         footerMain: "New initiatives",
         footerSub: "Programs created in the last 30 days",
       },
@@ -91,7 +91,10 @@ export default function DashboardPrograms() {
               </p>
             </div>
           </div>
-          <ProgramSectionCards cards={cards} />
+
+          <div className="px-6">
+            <ProgramSectionCards cards={cards} layout="auto" />
+          </div>
           <ProgramTable programs={programData} />
         </div>
       </div>

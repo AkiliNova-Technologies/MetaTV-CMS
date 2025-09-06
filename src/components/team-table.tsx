@@ -113,6 +113,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "./ui/alert-dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "./ui/sheet";
 
 // Create a separate component for the drag handle
 function DragHandle({ id }: { id: number }) {
@@ -300,12 +307,22 @@ function DeleteMemberDialog({
   );
 }
 
-function AddMemberDrawer({
+export function AddMemberDrawer({
   onAddMember,
+  showTrigger = true,
+  open,
+  onOpenChange,
 }: {
   onAddMember: (member: UserFormData) => void;
+  showTrigger?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const { reload: UsersReload } = useReduxUsers();
 
@@ -339,24 +356,29 @@ function AddMemberDrawer({
     }
   };
 
-  return (
-    <Drawer open={isOpen} onOpenChange={setIsOpen} direction="right">
-      <DrawerTrigger asChild>
-        <Button variant="outline" size="sm">
-          <IconPlus />
-          <span className="hidden lg:inline">Add Member</span>
-        </Button>
-      </DrawerTrigger>
+  const closeDrawer = () => setIsOpen(false);
 
-      <DrawerContent className="h-full w-full max-w-md ml-auto overflow-y-auto">
-        <DrawerHeader className="gap-1">
-          <DrawerTitle className="flex items-center gap-2">
+
+  return (
+    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      {showTrigger && (
+        <SheetTrigger asChild>
+          <Button variant="outline" size="sm">
+            <IconPlus />
+            <span className="hidden lg:inline">Add Member</span>
+          </Button>
+        </SheetTrigger>
+      )}
+
+      <SheetContent className="w-full sm:max-w-md overflow-y-auto" side="right">
+        <SheetHeader className="space-y-1">
+          <SheetTitle className="flex items-center gap-2">
             <IconUser className="size-5" />
             Add New Team Member
-          </DrawerTitle>
-        </DrawerHeader>
+          </SheetTitle>
+        </SheetHeader>
 
-        <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
+        <div className="flex flex-col gap-4 overflow-y-auto px-6 text-sm mt-6">
           <form
             onSubmit={handleSubmit(onSubmit)}
             className="flex flex-col gap-4"
@@ -366,6 +388,7 @@ function AddMemberDrawer({
               <div className="flex flex-col gap-3">
                 <Label htmlFor="firstName">First Name *</Label>
                 <Input
+                placeholder="first name"
                   id="firstName"
                   {...register("firstName", {
                     required: "First name is required",
@@ -381,6 +404,7 @@ function AddMemberDrawer({
               <div className="flex flex-col gap-3">
                 <Label htmlFor="lastName">Last Name *</Label>
                 <Input
+                  placeholder="last name"
                   id="lastName"
                   {...register("lastName", {
                     required: "Last name is required",
@@ -397,6 +421,7 @@ function AddMemberDrawer({
             <div className="flex flex-col gap-3">
               <Label htmlFor="username">Username *</Label>
               <Input
+                placeholder="username"
                 id="username"
                 {...register("username", {
                   required: "Username is required",
@@ -413,6 +438,7 @@ function AddMemberDrawer({
               <div className="flex flex-col gap-3">
                 <Label htmlFor="email">Email *</Label>
                 <Input
+                  placeholder="user@metatv.com"
                   id="email"
                   type="email"
                   {...register("email", {
@@ -453,16 +479,23 @@ function AddMemberDrawer({
               )}
             </div>
 
-            <DrawerFooter className="px-0 mt-6">
-              <Button type="submit">Add Member</Button>
-              <DrawerClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DrawerClose>
-            </DrawerFooter>
+            <div className="flex gap-3 pt-4 border-t mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={closeDrawer}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1">
+                Add Member
+              </Button>
+            </div>
           </form>
         </div>
-      </DrawerContent>
-    </Drawer>
+      </SheetContent>
+    </Sheet>
   );
 }
 

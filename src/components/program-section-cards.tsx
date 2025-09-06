@@ -20,9 +20,10 @@ export type CardData = {
 
 interface ProgramSectionCardsProps {
   cards: CardData[];
+  layout?: "auto" | "2x2" | "1x1" | "4col";
 }
 
-export function ProgramSectionCards({ cards }: ProgramSectionCardsProps) {
+export function ProgramSectionCards({ cards, layout= "auto" }: ProgramSectionCardsProps) {
   // Map titles to icons for visual consistency
   const iconMap: { [key: string]: React.ComponentType<{ className?: string }> } = {
     "Total Programs": IconTable,
@@ -31,9 +32,27 @@ export function ProgramSectionCards({ cards }: ProgramSectionCardsProps) {
     "Recent Programs": IconTable,
   };
 
+   // Determine grid classes based on layout prop
+  const getGridClasses = () => {
+    switch (layout) {
+      case "2x2":
+        return "grid grid-cols-2 gap-4";
+      case "1x1":
+        return "grid grid-cols-1 gap-4";
+      case "4col":
+        return "grid grid-cols-1 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 gap-4";
+      case "auto":
+      default:
+        return "grid grid-cols-1 @sm/main:grid-cols-2 @xl/main:grid-cols-4 gap-4"; // Responsive default
+    }
+  };
+
+  const dataToRender =layout === "2x2" ? cards!.slice(0, 4) : cards
+
   return (
-    <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
-      {cards.map((card, idx) => {
+    <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs ">
+      <div className={getGridClasses()}>
+      {dataToRender.map((card, idx) => {
         const isUp = card.trend === "up";
         const TrendIcon = isUp ? IconTrendingUp : IconTrendingDown;
         const CardIcon = iconMap[card.title] || IconTable; // Fallback to IconTable
@@ -64,6 +83,7 @@ export function ProgramSectionCards({ cards }: ProgramSectionCardsProps) {
           </Card>
         );
       })}
+    </div>
     </div>
   );
 }

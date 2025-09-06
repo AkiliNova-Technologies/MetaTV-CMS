@@ -14,19 +14,22 @@ import DashboardEditVideo from "./pages/dashboard/DashboardEditVideo";
 import DashboardWatchVideo from "./pages/dashboard/DashboardWatchVideo";
 import DashboardMusic from "./pages/dashboard/DashboardMusic";
 import DashboardAnalytics from "./pages/dashboard/DashboardAnalytics";
+import DashboardLiveStream from "./pages/dashboard/DashboardLiveSream";
+import { Toaster } from "./components/ui/sonner";
+import DashboardQuickCreate from "./pages/dashboard/DashboardQuickCreate";
 
 function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+      <Toaster position="top-right" />
       <Router>
         <Routes>
           <Route path="/" element={<LoginPage />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
+            <Route path="quick-create" element={<DashboardQuickCreate />} />
             <Route path="analytics" element={<DashboardAnalytics />} />
-            <Route path="live" element={<div>Live Stream Page</div>}>
-              <Route path="add" element={<div>Add Live Stream Page</div>} />
-              <Route path="chat" element={<div>Live Chat Page</div>} />
+            <Route path="livestream" element={<DashboardLiveStream />}>
               <Route path="viewers" element={<div>Live Viewers Page</div>} />
             </Route>
             <Route path="videos" element={<VideoLayout />}>

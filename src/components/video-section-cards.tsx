@@ -25,14 +25,19 @@ export type CardData = {
 // Extend videoSchema to make programId optional
 type VideoSectionCardVideo = z.infer<typeof videoSchema> & { programId?: number };
 
+// Updated VideoSectionCards component with layout prop
 interface VideoSectionCardsProps {
   cards: CardData[];
   videos: VideoSectionCardVideo[];
   onFilterChange?: (filter: { key: string; value: string | number }) => void;
+  layout?: 'auto' | '2x2' | '1x1' | '4col'; // Add layout prop
 }
 
-export function VideoSectionCards({ cards, onFilterChange }: VideoSectionCardsProps) {
-  // Map titles to icons for visual consistency
+export function VideoSectionCards({ 
+  cards, 
+  onFilterChange, 
+  layout = 'auto' 
+}: VideoSectionCardsProps) {
   const iconMap: { [key: string]: React.ComponentType<{ className?: string }> } = {
     "Total Videos": IconVideo,
     "Public Videos": IconGlobe,
@@ -40,18 +45,36 @@ export function VideoSectionCards({ cards, onFilterChange }: VideoSectionCardsPr
     "Total Views": IconEye,
   };
 
+  // Determine grid classes based on layout prop
+  const getGridClasses = () => {
+    switch(layout) {
+      case '2x2':
+        return 'grid grid-cols-2 gap-4'; // Fixed 2x2 grid
+      case '1x1':
+        return 'grid grid-cols-1 gap-4'; // Single column
+      case '4col':
+        return 'grid grid-cols-1 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 gap-4'; // Original responsive
+      case 'auto':
+      default:
+        return 'grid grid-cols-1 @sm/main:grid-cols-2 @xl/main:grid-cols-4 gap-4'; // Responsive default
+    }
+  };
+
+  // Determine how many cards to show based on layout
+  const displayCards = layout === '2x2' ? cards.slice(0, 4) : cards;
+
   return (
-    <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
-      {cards.map((card, idx) => {
+    <div className={getGridClasses()}>
+      {displayCards.map((card, idx) => {
         const isUp = card.trend === "up";
         const TrendIcon = isUp ? IconTrendingUp : IconTrendingDown;
-        const CardIcon = iconMap[card.title] || IconVideo; // Fallback to IconVideo
+        const CardIcon = iconMap[card.title] || IconVideo;
 
         return (
           <Card
             key={idx}
             className={cn(
-              "@container/card",
+              "h-full",
               onFilterChange && card.title in { "Public Videos": 1, "New Videos": 1 }
                 ? "cursor-pointer hover:shadow-md hover:bg-gray-50 dark:hover:bg-gray-800"
                 : ""
@@ -74,7 +97,7 @@ export function VideoSectionCards({ cards, onFilterChange }: VideoSectionCardsPr
                 <CardIcon className="size-4" />
                 {card.title}
               </CardDescription>
-              <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+              <CardTitle className="text-2xl font-semibold tabular-nums">
                 {card.value}
               </CardTitle>
               {card.trend && card.percentage && (

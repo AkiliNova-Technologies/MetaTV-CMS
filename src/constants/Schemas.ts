@@ -60,3 +60,44 @@ export const musicSchema = z.object({
     })
   ),
 });
+
+export const livestreamSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  description: z.string().nullable().optional(),
+
+  status: z.enum(["LIVE", "SCHEDULED", "ENDED", "PREPARING"]),
+
+  scheduledAt: z.string().nullable().optional(),
+  startedAt: z.string().nullable().optional(),
+  endedAt: z.string().nullable().optional(),
+
+  streamKey: z.string(),
+  streamUrl: z.string(),
+  thumbnailUrl: z.string().nullable().optional(),
+
+  visibility: z.enum(["PUBLIC", "PRIVATE", "UNLISTED"]),
+  isRecording: z.boolean(),
+
+  currentViewers: z.number(),
+  peakViewers: z.number().nullable().optional(),
+  totalViews: z.number(),
+  duration: z.number().nullable().optional(),
+
+  quality: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional(),
+
+  programId: z.number().nullable().optional(),
+  program: z
+    .object({
+      id: z.number(),
+      name: z.string(),
+    })
+    .nullable()
+    .optional(),
+
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
