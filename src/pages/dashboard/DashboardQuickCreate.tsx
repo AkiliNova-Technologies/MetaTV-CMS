@@ -27,6 +27,7 @@ import { useReduxPrograms } from "@/hooks/useReduxPrograms";
 import { useReduxMusic } from "@/hooks/useReduxMusic";
 import { useReduxLiveStreams } from "@/hooks/useReduxLiveStreams";
 import { toast } from "sonner";
+import { IconBroadcast } from "@tabler/icons-react";
 
 export default function DashboardQuickCreate() {
   const navigate = useNavigate();
@@ -55,7 +56,7 @@ export default function DashboardQuickCreate() {
       id: "livestream",
       label: "Create Livestream",
       description: "Go live with your audience",
-      icon: Video,
+      icon: IconBroadcast,
       action: () => setActiveDrawer("livestream"),
       badge: "Stream",
       status: "secondary" as const,

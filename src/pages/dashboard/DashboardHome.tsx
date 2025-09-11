@@ -45,7 +45,7 @@ interface MusicResponse {
 
 export default function DashboardHome() {
   const { videos } = useReduxVideos();
-  const { music: musicResponse } = useReduxMusic(); // Rename to musicResponse
+  const { music: musicResponse } = useReduxMusic(); 
   const { users } = useReduxUsers();
   const { livestreams } = useReduxLiveStreams();
   const { programs } = useReduxPrograms();
@@ -366,7 +366,7 @@ export default function DashboardHome() {
               </span>
             </div>
             <div className="px-4">
-              <TeamSectionCards cards={teamCards} />
+              <TeamSectionCards cards={teamCards} layout="auto"/>
             </div>
           </div>
 
@@ -380,7 +380,7 @@ export default function DashboardHome() {
               </span>
             </div>
             <div className="px-4">
-              <ProgramSectionCards cards={programCards} />
+              <ProgramSectionCards cards={programCards} layout="auto"/>
             </div>
           </div>
 
@@ -434,6 +434,7 @@ export default function DashboardHome() {
               <LivestreamSectionCards
                 livestreams={livestreams}
                 cards={streamCards}
+                layout="auto"
               />
             </div>
           </div>

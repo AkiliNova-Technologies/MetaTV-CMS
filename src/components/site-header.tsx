@@ -5,9 +5,14 @@ import { useLocation } from "react-router-dom"
 
 function getPageTitle(pathname: string) {
   const segments = pathname.replace(/\/$/, "").split("/").filter(Boolean)
-  const last = segments[segments.length - 1] || "Dashboard"
-  return last.charAt(0).toUpperCase() + last.slice(1)
+  const last = segments[segments.length - 1] || "dashboard"
+
+  return last
+    .split("-") // handle kebab-case
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
 }
+
 
 export function SiteHeader() {
   const { pathname } = useLocation()

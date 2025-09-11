@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Upload, message } from "antd";
+import { useState, useEffect, useRef } from "react";
+import { message } from "antd";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,18 +15,22 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/utils/api";
 import { useReduxVideos } from "@/hooks/useReduxVideos";
-import type { RcFile } from "antd/es/upload";
 import { useReduxAuth } from "@/hooks/useReduxAuth";
 import type { Program } from "@/types/program";
 import { useReduxPrograms } from "@/hooks/useReduxPrograms";
 import type { videoSchema } from "@/constants/Schemas";
 import { z } from "zod";
-import { Loader2, AlertCircle } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  ImageIcon,
+  VideoIcon,
+  Upload as UploadIcon,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { IconX } from "@tabler/icons-react";
+import { toast } from "sonner";
 
-const { Dragger } = Upload;
-
-// Extend videoSchema to reflect category as an array
 type Video = z.infer<typeof videoSchema> & {
   programId?: number;
   category?: string[];
@@ -49,6 +53,8 @@ interface FormData {
   programId: string;
   uploadedById: number;
   isApproved: boolean;
+  thumbnailUrl?: string;
+  videoUrl?: string;
 }
 
 export default function DashboardEditVideo() {
@@ -60,6 +66,14 @@ export default function DashboardEditVideo() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState({
+    thumbnail: false,
+    video: false,
+  });
+
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState<FormData>({
     title: "",
     category: "",
@@ -79,7 +93,7 @@ export default function DashboardEditVideo() {
     isApproved: false,
   });
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [thumbnailFile, setThumbnailFile] = useState<RcFile | null>(null);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
 
   // Fetch video data on mount
   useEffect(() => {
@@ -89,7 +103,6 @@ export default function DashboardEditVideo() {
         const response = await api.get(`/videos/${videoId}`);
         const video: Video = response.data;
         console.log("Fetched video:", video);
-        console.log("Setting category:", video.category?.[0] || "");
 
         setFormData({
           title: video.title || "",
@@ -109,6 +122,8 @@ export default function DashboardEditVideo() {
             video.programId?.toString() || video.program?.id?.toString() || "",
           uploadedById: video.uploadedById || user?.id || 0,
           isApproved: video.isApproved || false,
+          thumbnailUrl: video.thumbnailUrl,
+          videoUrl: video.videoUrl,
         });
       } catch (error) {
         console.error("Failed to fetch video:", error);
@@ -118,12 +133,14 @@ export default function DashboardEditVideo() {
       }
     };
 
-    fetchVideo();
+    if (videoId) {
+      fetchVideo();
+    }
   }, [videoId, user]);
 
   const handleInputChange = (
     field: keyof FormData,
-    value: string | boolean
+    value: string | boolean | number
   ) => {
     setFormData((prev) => ({
       ...prev,
@@ -131,53 +148,26 @@ export default function DashboardEditVideo() {
     }));
   };
 
-  const videoUploadProps = {
-    name: "video",
-    multiple: false,
-    accept: "video/*",
-    maxCount: 1,
-    beforeUpload: (file: File) => {
-      const isVideo = file.type?.startsWith("video/");
-      if (!isVideo) {
-        message.error("You can only upload video files!");
-        return false;
+  const handleDrop = (e: React.DragEvent, type: "thumbnail" | "video") => {
+    e.preventDefault();
+    setDragOver((prev) => ({ ...prev, [type]: false }));
+
+    const files = e.dataTransfer.files;
+    if (files && files[0]) {
+      if (type === "thumbnail") {
+        setThumbnailFile(files[0]);
+      } else if (type === "video") {
+        setVideoFile(files[0]);
       }
-      const isLt3GB = (file.size ?? 0) / 1024 / 1024 / 1024 < 3;
-      if (!isLt3GB) {
-        message.error("Video must be smaller than 3GB!");
-        return false;
-      }
-      setVideoFile(file);
-      return false;
-    },
-    onRemove: () => {
-      setVideoFile(null);
-    },
+    }
   };
 
-  const thumbnailUploadProps = {
-    name: "thumbnail",
-    multiple: false,
-    accept: "image/*",
-    maxCount: 1,
-    beforeUpload: (file: RcFile) => {
-      const isImage = file.type.startsWith("image/");
-      if (!isImage) {
-        message.error("You can only upload image files!");
-        return Upload.LIST_IGNORE;
-      }
-      const isLt5MB = file.size / 1024 / 1024 < 5;
-      if (!isLt5MB) {
-        message.error("Thumbnail must be smaller than 5MB!");
-        return Upload.LIST_IGNORE;
-      }
+  const handleFileChange = (type: "thumbnail" | "video", file: File | null) => {
+    if (type === "thumbnail") {
       setThumbnailFile(file);
-      return false;
-    },
-    onRemove: () => {
-      setThumbnailFile(null);
-      return true;
-    },
+    } else {
+      setVideoFile(file);
+    }
   };
 
   const handleSubmit = async () => {
@@ -190,32 +180,74 @@ export default function DashboardEditVideo() {
 
     try {
       const formDataToSend = new FormData();
+
+      // Only append files if they were changed
       if (videoFile) {
         formDataToSend.append("video", videoFile);
       }
       if (thumbnailFile) {
         formDataToSend.append("thumbnail", thumbnailFile);
       }
+
       formDataToSend.append("uploadedById", user!.id.toString());
-      (Object.keys(formData) as (keyof FormData)[]).forEach((key) => {
+
+      // Convert boolean values properly
+      // Explicitly list all form fields to avoid undefined issues
+      const formFields: (keyof FormData)[] = [
+        "title",
+        "category",
+        "description",
+        "tags",
+        "isFeatured",
+        "allowComments",
+        "visibility",
+        "monetization",
+        "duration",
+        "resolution",
+        "size",
+        "format",
+        "codec",
+        "programId",
+        "uploadedById",
+        "isApproved",
+      ];
+
+      formFields.forEach((key) => {
+        const value = formData[key];
+
+        if (value === undefined || value === null) {
+          return;
+        }
+
         if (key === "category") {
-          formDataToSend.append("category[]", formData.category.toUpperCase());
+          formDataToSend.append("category[]", (value as string).toUpperCase());
+        } else if (
+          key === "isFeatured" ||
+          key === "allowComments" ||
+          key === "isApproved"
+        ) {
+          formDataToSend.append(key, (value as boolean) ? "true" : "false");
+        } else if (
+          key === "uploadedById" ||
+          key === "duration" ||
+          key === "size"
+        ) {
+          formDataToSend.append(key, (value as number).toString());
         } else {
-          formDataToSend.append(key, formData[key].toString());
+          formDataToSend.append(key, String(value));
         }
       });
 
       console.log("Submitting update for video:", formDataToSend);
 
       await api.put(`/videos/${videoId}`, formDataToSend);
-
       await reload();
 
-      message.success("Video updated successfully!");
+      toast.success("Video updated successfully!");
       navigate("/dashboard/videos");
     } catch (error) {
       console.error("Failed to update video:", error);
-      message.error("Update failed. Please try again.");
+      toast.error("Update failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -261,7 +293,9 @@ export default function DashboardEditVideo() {
     <div className="min-h-screen">
       <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold">Update Video "{formData.title}"</h1>
+          <h1 className="text-3xl font-bold">
+            Update Video "{formData.title}"
+          </h1>
           <p className="mt-2 text-gray-600">Update your video details</p>
         </div>
 
@@ -370,7 +404,7 @@ export default function DashboardEditVideo() {
                       id="isFeatured"
                       checked={formData.isFeatured}
                       onCheckedChange={(checked) =>
-                        handleInputChange("isFeatured", checked)
+                        handleInputChange("isFeatured", checked as boolean)
                       }
                     />
                     <div className="space-y-1">
@@ -386,7 +420,7 @@ export default function DashboardEditVideo() {
                       id="allowComments"
                       checked={formData.allowComments}
                       onCheckedChange={(checked) =>
-                        handleInputChange("allowComments", checked)
+                        handleInputChange("allowComments", checked as boolean)
                       }
                     />
                     <div className="space-y-1">
@@ -399,39 +433,156 @@ export default function DashboardEditVideo() {
                 </div>
               </div>
 
-              {/* Media Files */}
+              {/* Media Files - Updated to match Add Video page */}
               <div className="rounded-lg border p-6 space-y-4">
                 <h3 className="text-lg font-medium">Media Files</h3>
 
-                <div className="grid grid-cols-2 gap-5 pb-6 md:grid-cols-2 sm:grid-cols-1 lg:grid-cols-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pb-6">
                   {/* Thumbnail Upload */}
                   <div className="space-y-2">
-                    <Label>Thumbnail *</Label>
-                    <Dragger {...thumbnailUploadProps}>
-                      <div className="p-6 text-center">
-                        <p className="text-base text-gray-300">
-                          Click or drag thumbnail to upload
-                        </p>
-                        <p className="text-sm text-gray-500 mt-2">
+                    <Label className="flex items-center gap-2">
+                      <ImageIcon className="size-4" />
+                      Thumbnail {!thumbnailFile && "*"}
+                    </Label>
+                    <div
+                      className={`border-2 border-dashed rounded-lg p-6 h-35 text-center transition-colors cursor-pointer
+                        ${
+                          dragOver.thumbnail
+                            ? "border-primary bg-primary/5"
+                            : "border-muted-foreground/25"
+                        }
+                      `}
+                      onDrop={(e) => handleDrop(e, "thumbnail")}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOver((prev) => ({ ...prev, thumbnail: true }));
+                      }}
+                      onDragLeave={() =>
+                        setDragOver((prev) => ({ ...prev, thumbnail: false }))
+                      }
+                      onClick={() => thumbnailInputRef.current?.click()}
+                    >
+                      <input
+                        ref={thumbnailInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) =>
+                          handleFileChange(
+                            "thumbnail",
+                            e.target.files?.[0] || null
+                          )
+                        }
+                      />
+                      <div className="text-sm text-muted-foreground">
+                        <UploadIcon className="mx-auto size-6 mb-2" />
+                        Drag & drop image here or click to browse
+                        <div className="text-xs mt-1">
                           JPG, PNG (16:9 ratio recommended)
-                        </p>
+                        </div>
                       </div>
-                    </Dragger>
+                    </div>
+
+                    {/* File info and remove button */}
+                    {thumbnailFile && (
+                      <div className="flex items-center space-x-2 mt-2 max-w-xs text-foreground truncate p-2 bg-muted rounded-md">
+                        <ImageIcon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate flex-1">
+                          {thumbnailFile.name}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          type="button"
+                          onClick={() => handleFileChange("thumbnail", null)}
+                          className="size-6 hover:bg-destructive hover:text-destructive-foreground"
+                        >
+                          <IconX className="size-4" />
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Show existing thumbnail when not uploading new one */}
+                    {!thumbnailFile && formData.thumbnailUrl && (
+                      <div className="flex items-center space-x-2 mt-2 max-w-xs text-muted-foreground truncate p-2 bg-muted rounded-md">
+                        <ImageIcon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate flex-1">
+                          Using existing thumbnail
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Video Upload */}
                   <div className="space-y-2">
-                    <Label>Video File *</Label>
-                    <Dragger {...videoUploadProps}>
-                      <div className="p-6 text-center">
-                        <p className="text-base text-gray-300">
-                          Click or drag video file to upload
-                        </p>
-                        <p className="text-sm text-gray-500 mt-2">
+                    <Label className="flex items-center gap-2">
+                      <VideoIcon className="size-4" />
+                      Video File {!videoFile && "*"}
+                    </Label>
+                    <div
+                      className={`border-2 border-dashed rounded-lg p-6 h-35 text-center transition-colors cursor-pointer
+                        ${
+                          dragOver.video
+                            ? "border-primary bg-primary/5"
+                            : "border-muted-foreground/25"
+                        }
+                      `}
+                      onDrop={(e) => handleDrop(e, "video")}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOver((prev) => ({ ...prev, video: true }));
+                      }}
+                      onDragLeave={() =>
+                        setDragOver((prev) => ({ ...prev, video: false }))
+                      }
+                      onClick={() => videoInputRef.current?.click()}
+                    >
+                      <input
+                        ref={videoInputRef}
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={(e) =>
+                          handleFileChange("video", e.target.files?.[0] || null)
+                        }
+                      />
+                      <div className="text-sm text-muted-foreground">
+                        <UploadIcon className="mx-auto size-6 mb-2" />
+                        Drag & drop video file here or click to browse
+                        <div className="text-xs mt-1">
                           MP4, MOV, AVI (MAX. 3GB)
-                        </p>
+                        </div>
                       </div>
-                    </Dragger>
+                    </div>
+
+                    {/* File info and remove button */}
+                    {videoFile && (
+                      <div className="flex items-center space-x-2 mt-2 max-w-xs text-foreground truncate p-2 bg-muted rounded-md">
+                        <VideoIcon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate flex-1">
+                          {videoFile.name}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          type="button"
+                          onClick={() => handleFileChange("video", null)}
+                          className="size-6 hover:bg-destructive hover:text-destructive-foreground"
+                        >
+                          <IconX className="size-4" />
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Show existing video when not uploading new one */}
+                    {!videoFile && formData.videoUrl && (
+                      <div className="flex items-center space-x-2 mt-2 max-w-xs text-muted-foreground truncate p-2 bg-muted rounded-md">
+                        <VideoIcon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate flex-1">
+                          Using existing video file
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -486,9 +637,9 @@ export default function DashboardEditVideo() {
                     <div className="flex items-start space-x-2 pt-5">
                       <Checkbox
                         id="isApproved"
-                        checked={formData.isFeatured}
+                        checked={formData.isApproved}
                         onCheckedChange={(checked) =>
-                          handleInputChange("isApproved", checked)
+                          handleInputChange("isApproved", checked as boolean)
                         }
                       />
                       <div className="space-y-1">

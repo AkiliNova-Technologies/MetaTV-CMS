@@ -4,5 +4,6 @@ export interface Program {
   description: string; 
   createdAt: string; 
   videos: [];
-  subscribers: [];  
+  subscribers: [];
+  totalSubscribers: number;  
 }

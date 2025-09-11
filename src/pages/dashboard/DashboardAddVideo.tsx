@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Upload, message } from "antd";
+import { useState, useRef } from "react";
+import { message } from "antd";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,12 +15,12 @@ import {
 import { useNavigate } from "react-router-dom";
 import api from "@/utils/api";
 import { useReduxVideos } from "@/hooks/useReduxVideos";
-import type { RcFile } from "antd/es/upload";
+// import type { RcFile } from "antd/es/upload";
 import { useReduxAuth } from "@/hooks/useReduxAuth";
 import type { Program } from "@/types/program";
 import { useReduxPrograms } from "@/hooks/useReduxPrograms";
-
-const { Dragger } = Upload;
+import { ImageIcon, VideoIcon, Upload as UploadIcon } from "lucide-react";
+import { IconX } from "@tabler/icons-react";
 
 interface FormData {
   title: string;
@@ -38,6 +38,8 @@ interface FormData {
   codec: string;
   programId: string;
   uploadedById: number;
+  thumbnailFile: File | null;
+  videoFile: File | null;
 }
 
 export default function DashboardAddVideo() {
@@ -46,6 +48,14 @@ export default function DashboardAddVideo() {
   const { reload } = useReduxVideos();
   const { programs } = useReduxPrograms();
   const [loading, setLoading] = useState(false);
+  const [dragOver, setDragOver] = useState({
+    thumbnail: false,
+    video: false,
+  });
+
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState<FormData>({
     title: "",
     category: "",
@@ -62,13 +72,13 @@ export default function DashboardAddVideo() {
     codec: "h264",
     programId: "",
     uploadedById: 0,
+    thumbnailFile: null,
+    videoFile: null,
   });
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [thumbnailFile, setThumbnailFile] = useState<RcFile | null>(null);
 
   const handleInputChange = (
     field: keyof FormData,
-    value: string | boolean
+    value: string | boolean | File | null
   ) => {
     setFormData((prev) => ({
       ...prev,
@@ -76,77 +86,53 @@ export default function DashboardAddVideo() {
     }));
   };
 
-  const videoUploadProps = {
-    name: "video",
-    multiple: false,
-    accept: "video/*",
-    maxCount: 1,
-    beforeUpload: (file: File) => {
-      const isVideo = file.type?.startsWith("video/");
-      if (!isVideo) {
-        message.error("You can only upload video files!");
-        return false;
+  const handleDrop = (e: React.DragEvent, type: "thumbnail" | "video") => {
+    e.preventDefault();
+    setDragOver((prev) => ({ ...prev, [type]: false }));
+
+    const files = e.dataTransfer.files;
+    if (files && files[0]) {
+      if (type === "thumbnail") {
+        handleFileChange("thumbnailFile", files[0]);
+      } else if (type === "video") {
+        handleFileChange("videoFile", files[0]);
       }
-      const isLt3GB = (file.size ?? 0) / 1024 / 1024 / 1024 < 3;
-      if (!isLt3GB) {
-        message.error("Video must be smaller than 3GB!");
-        return false;
-      }
-      setVideoFile(file);
-      return false;
-    },
-    onRemove: () => {
-      setVideoFile(null);
-    },
+    }
   };
 
-  const thumbnailUploadProps = {
-    name: "thumbnail",
-    multiple: false,
-    accept: "image/*",
-    maxCount: 1,
-    beforeUpload: (file: RcFile) => {
-      // Use RcFile instead of UploadFile
-      const isImage = file.type.startsWith("image/");
-      if (!isImage) {
-        message.error("You can only upload image files!");
-        return Upload.LIST_IGNORE;
-      }
-      const isLt5MB = file.size / 1024 / 1024 < 5;
-      if (!isLt5MB) {
-        message.error("Thumbnail must be smaller than 5MB!");
-        return Upload.LIST_IGNORE;
-      }
-      setThumbnailFile(file);
-      return false;
-    },
-    onRemove: () => {
-      setThumbnailFile(null);
-      return true;
-    },
+  const handleFileChange = (
+    field: "thumbnailFile" | "videoFile",
+    file: File | null
+  ) => {
+    setFormData((prev) => ({ ...prev, [field]: file }));
   };
 
   const handleSubmit = async () => {
+    if (!formData.videoFile || !formData.thumbnailFile) {
+      message.error("Please select both a video and thumbnail file");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const formDataToSend = new FormData();
-      formDataToSend.append("video", videoFile as unknown as File);
-      formDataToSend.append("thumbnail", thumbnailFile as unknown as File);
+      formDataToSend.append("video", formData.videoFile);
+      formDataToSend.append("thumbnail", formData.thumbnailFile);
       formDataToSend.append("uploadedById", user!.id.toString());
+
       // Explicitly append formData fields
       (Object.keys(formData) as (keyof FormData)[]).forEach((key) => {
         if (key === "category") {
           formDataToSend.append("category[]", formData.category.toUpperCase());
-        } else {
-          formDataToSend.append(key, formData[key].toString());
+        } else if (key !== "thumbnailFile" && key !== "videoFile") {
+          formDataToSend.append(key, formData[key]?.toString() || "");
         }
       });
 
       console.log("Video Data: ", formDataToSend);
 
       await api.post("/videos", formDataToSend);
-
       await reload();
 
       message.success("Video uploaded successfully!");
@@ -192,8 +178,8 @@ export default function DashboardAddVideo() {
                     <Label htmlFor="program">Program *</Label>
                     <Select
                       value={formData.programId.toString()}
-                      onValueChange={
-                        (value) => handleInputChange("programId", value)
+                      onValueChange={(value) =>
+                        handleInputChange("programId", value)
                       }
                     >
                       <SelectTrigger className="w-full">
@@ -275,7 +261,7 @@ export default function DashboardAddVideo() {
                       id="isFeatured"
                       checked={formData.isFeatured}
                       onCheckedChange={(checked) =>
-                        handleInputChange("isFeatured", checked)
+                        handleInputChange("isFeatured", checked as boolean)
                       }
                     />
                     <div className="space-y-1">
@@ -291,7 +277,7 @@ export default function DashboardAddVideo() {
                       id="allowComments"
                       checked={formData.allowComments}
                       onCheckedChange={(checked) =>
-                        handleInputChange("allowComments", checked)
+                        handleInputChange("allowComments", checked as boolean)
                       }
                     />
                     <div className="space-y-1">
@@ -308,35 +294,137 @@ export default function DashboardAddVideo() {
               <div className="rounded-lg border p-6 space-y-4">
                 <h3 className="text-lg font-medium">Media Files</h3>
 
-                <div className="grid grid-cols-2 gap-5 pb-6 md:grid-cols-2 sm:grid-cols-1 lg:grid-cols-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pb-6">
                   {/* Thumbnail Upload */}
                   <div className="space-y-2">
-                    <Label>Thumbnail *</Label>
-                    <Dragger {...thumbnailUploadProps}>
-                      <div className="p-6 text-center">
-                        <p className="text-base text-gray-300">
-                          Click or drag thumbnail to upload
-                        </p>
-                        <p className="text-sm text-gray-500 mt-2">
+                    <Label className="flex items-center gap-2">
+                      <ImageIcon className="size-4" />
+                      Thumbnail *
+                    </Label>
+                    <div
+                      className={`border-2 border-dashed rounded-lg p-6 h-35 text-center transition-colors cursor-pointer
+                        ${
+                          dragOver.thumbnail
+                            ? "border-primary bg-primary/5"
+                            : "border-muted-foreground/25"
+                        }
+                      `}
+                      onDrop={(e) => handleDrop(e, "thumbnail")}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOver((prev) => ({ ...prev, thumbnail: true }));
+                      }}
+                      onDragLeave={() =>
+                        setDragOver((prev) => ({ ...prev, thumbnail: false }))
+                      }
+                      onClick={() => thumbnailInputRef.current?.click()}
+                    >
+                      <input
+                        ref={thumbnailInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) =>
+                          handleFileChange(
+                            "thumbnailFile",
+                            e.target.files?.[0] || null
+                          )
+                        }
+                      />
+                      <div className="text-sm text-muted-foreground">
+                        <UploadIcon className="mx-auto size-6 mb-2" />
+                        Drag & drop image here or click to browse
+                        <div className="text-xs mt-1">
                           JPG, PNG (16:9 ratio recommended)
-                        </p>
+                        </div>
                       </div>
-                    </Dragger>
+                    </div>
+
+                    {/* File info and remove button */}
+                    {formData.thumbnailFile && (
+                      <div className="flex items-center space-x-2 mt-2 max-w-xs text-foreground truncate p-2 bg-muted rounded-md">
+                        <ImageIcon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate flex-1">
+                          {formData.thumbnailFile.name}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          type="button"
+                          onClick={() =>
+                            handleFileChange("thumbnailFile", null)
+                          }
+                          className="size-6 hover:bg-destructive hover:text-destructive-foreground"
+                        >
+                          <IconX className="size-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Video Upload */}
                   <div className="space-y-2">
-                    <Label>Video File *</Label>
-                    <Dragger {...videoUploadProps}>
-                      <div className="p-6 text-center">
-                        <p className="text-base text-gray-300">
-                          Click or drag video file to upload
-                        </p>
-                        <p className="text-sm text-gray-500 mt-2">
-                          MP4, MOV, AVI (MAX. 3GB)
-                        </p>
+                    <Label className="flex items-center gap-2">
+                      <VideoIcon className="size-4" />
+                      Video File *
+                    </Label>
+                    <div
+                      className={`border-2 border-dashed rounded-lg p-6 h-35 text-center transition-colors cursor-pointer
+                        ${
+                          dragOver.video
+                            ? "border-primary bg-primary/5"
+                            : "border-muted-foreground/25"
+                        }
+                      `}
+                      onDrop={(e) => handleDrop(e, "video")}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOver((prev) => ({ ...prev, video: true }));
+                      }}
+                      onDragLeave={() =>
+                        setDragOver((prev) => ({ ...prev, video: false }))
+                      }
+                      onClick={() => videoInputRef.current?.click()}
+                    >
+                      <input
+                        ref={videoInputRef}
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={(e) =>
+                          handleFileChange(
+                            "videoFile",
+                            e.target.files?.[0] || null
+                          )
+                        }
+                      />
+                      <div className="text-sm text-muted-foreground">
+                        <UploadIcon className="mx-auto size-6 mb-2" />
+                        Drag & drop video file here or click to browse
+                        <div className="text-xs mt-1">
+                          MP4, MOV, AVI (MAX. 5GB)
+                        </div>
                       </div>
-                    </Dragger>
+                    </div>
+
+                    {/* File info and remove button */}
+                    {formData.videoFile && (
+                      <div className="flex items-center space-x-2 mt-2 max-w-xs text-foreground truncate p-2 bg-muted rounded-md">
+                        <VideoIcon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate flex-1">
+                          {formData.videoFile.name}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          type="button"
+                          onClick={() => handleFileChange("videoFile", null)}
+                          className="size-6 hover:bg-destructive hover:text-destructive-foreground"
+                        >
+                          <IconX className="size-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -403,7 +491,9 @@ export default function DashboardAddVideo() {
                   variant="default"
                   onClick={handleSubmit}
                   className="flex-1"
-                  disabled={!videoFile || !thumbnailFile || loading}
+                  disabled={
+                    !formData.videoFile || !formData.thumbnailFile || loading
+                  }
                 >
                   {loading ? "Uploading..." : "Upload Video"}
                 </Button>

@@ -34,7 +34,6 @@ import {
   IconAlertCircle,
   IconVideo,
   IconUsers,
-  IconRefresh,
 } from "@tabler/icons-react";
 import {
   flexRender,
@@ -111,7 +110,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "./ui/alert-dialog"; // Import the program schema
+} from "./ui/alert-dialog";
 import { useReduxPrograms } from "@/hooks/useReduxPrograms";
 import {
   Sheet,
@@ -529,7 +528,11 @@ function ProgramTableCellViewer({
 
 // Main ProgramTable Component
 export function ProgramTable({ programs }: { programs: Program[] }) {
-  const { programs: programData, reload: programsReload } = useReduxPrograms();
+  const {
+    programs: programData,
+    reload: programsReload,
+    loading,
+  } = useReduxPrograms();
   const [data, setData] = React.useState<Program[]>(programs);
   const [viewMode, setViewMode] = React.useState<"table" | "card">("table");
   const [rowSelection, setRowSelection] = React.useState({});
@@ -588,10 +591,6 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
     },
     []
   );
-
-  const handleRetryFetch = async () => {
-    await programsReload();
-  };
 
   const handleDeleteProgram = React.useCallback((programId: number) => {
     setData((prev) => prev.filter((program) => program.id !== programId));
@@ -859,6 +858,17 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
                       <DraggableRow key={row.id} row={row} />
                     ))}
                   </SortableContext>
+                ) : loading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={columns.length}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <IconLoader className="animate-spin size-8 text-muted-foreground" />
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   <TableRow>
                     <TableCell
@@ -867,15 +877,6 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
                     >
                       <div className="flex flex-col items-center gap-2">
                         <span>No programs found.</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleRetryFetch}
-                          className="text-sm text-primary flex items-center gap-2"
-                        >
-                          <IconRefresh className="size-4" />
-                          Retry
-                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

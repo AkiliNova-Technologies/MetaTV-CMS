@@ -23,13 +23,13 @@ import {
 } from "@/components/ui/sidebar";
 import { useSidebar } from "@/hooks/useSidebar";
 import { useReduxAuth } from "@/hooks/useReduxAuth";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { User } from "@/types/user";
 
 const getInitials = (firstname?: string, lastname?: string) => {
   const first = firstname?.[0]?.toUpperCase() || "";
   const last = lastname?.[0]?.toUpperCase() || "";
-  return (first + last) || "ME";
+  return first + last || "ME";
 };
 
 export function NavUser() {
@@ -40,19 +40,17 @@ export function NavUser() {
   const { user, signout } = useReduxAuth();
 
   const userData = (user ?? {}) as User;
-  const firstName = userData?.firstName || '';
-  const lastName = userData?.lastName || '';
-  const email = userData?.email || '';
-  const username = userData?.username || '';
-
-  console.log('User Data: ', userData)
+  const firstName = userData?.firstName || "";
+  const lastName = userData?.lastName || "";
+  const email = userData?.email || "";
+  const username = userData?.username || "";
 
   const initials = getInitials(firstName, lastName);
 
-  const handleLogout = async() => {
-    navigate("/")
+  const handleLogout = async () => {
     await signout();
-  }
+    navigate("/");
+  };
 
   return (
     <SidebarMenu>
@@ -65,10 +63,14 @@ export function NavUser() {
             >
               <Avatar className="h-8 w-8 rounded-lg grayscale">
                 <AvatarImage src={user?.avatar} alt={user?.username} />
-                <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                <AvatarFallback className="rounded-lg">
+                  {initials}
+                </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user?.firstName} {user?.lastName}</span>
+                <span className="truncate font-medium">
+                  {user?.firstName} {user?.lastName}
+                </span>
                 <span className="text-muted-foreground truncate text-xs">
                   {user?.email}
                 </span>
@@ -86,7 +88,9 @@ export function NavUser() {
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user?.avatar} alt={username} />
-                  <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">
+                    {initials}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{username}</span>
@@ -100,15 +104,15 @@ export function NavUser() {
             <DropdownMenuGroup>
               <DropdownMenuItem>
                 <IconUserCircle />
-                Account
+                <Link to={"/dashboard/my-profile"}>Account</Link>
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <IconCreditCard />
-                Billing
+                <Link to={"/dashboard/billing"}>Billing</Link>
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <IconNotification />
-                Notifications
+                <Link to={"/dashboard/notifications"}>Notifications</Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

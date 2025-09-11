@@ -1,5 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "./components/theme-provider";
+import { useEffect } from "react";
+import { useDispatch } from "react-redux";
+import { initializeAuth } from "@/redux/slices/authSlice";
 
 // Routes
 import DashboardLayout from "@/pages/layouts/DashboardLayout";
@@ -17,8 +20,17 @@ import DashboardAnalytics from "./pages/dashboard/DashboardAnalytics";
 import DashboardLiveStream from "./pages/dashboard/DashboardLiveSream";
 import { Toaster } from "./components/ui/sonner";
 import DashboardQuickCreate from "./pages/dashboard/DashboardQuickCreate";
+import DashboardSettings from "./pages/dashboard/DashboardSettings";
+import DashboardAccount from "./pages/dashboard/DashboardAccount";
 
 function App() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    // Initialize auth state with stored token
+    dispatch(initializeAuth());
+  }, [dispatch]);
+
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <Toaster position="top-right" />
@@ -41,6 +53,14 @@ function App() {
             <Route path="music" element={<DashboardMusic />} />
             <Route path="team" element={<DashboardTeam />} />
             <Route path="programs" element={<DashboardPrograms />} />
+            <Route path="settings" element={<DashboardSettings />} />
+            <Route path="my-profile" element={<DashboardAccount /> } />
+            <Route
+              path="notifications"
+              element={<div>Notifications Page</div>}
+            />
+            <Route path="billing" element={<div>Billing Page</div>} />
+            <Route path="search" element={<div>Search Page</div>} />
           </Route>
         </Routes>
       </Router>

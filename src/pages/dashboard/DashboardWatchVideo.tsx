@@ -7,7 +7,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, ThumbsUp, ThumbsDown, Share2, Download, MoreHorizontal } from "lucide-react";
+import {
+  Loader2,
+  ThumbsUp,
+  ThumbsDown,
+  Share2,
+  Download,
+  Play,
+  User,
+  MessageSquare,
+  ChevronDown,
+  ChevronUp,
+  Users
+} from "lucide-react";
 import api from "@/utils/api";
 import { useReduxAuth } from "@/hooks/useReduxAuth";
 import { useReduxPrograms } from "@/hooks/useReduxPrograms";
@@ -23,10 +35,8 @@ type Video = z.infer<typeof videoSchema> & {
   dislikes?: number;
   views?: number;
   program?: Program;
-  channelName?: string;
-  channelAvatar?: string;
-  subscribers?: number;
   uploadedAt?: string;
+  programSubscribers?: number;
 };
 
 type Comment = {
@@ -45,7 +55,7 @@ type RelatedVideo = {
   thumbnailUrl: string;
   duration: number;
   views: number;
-  channelName: string;
+  programId: number;
   uploadedAt: string;
 };
 
@@ -66,6 +76,12 @@ function formatViews(views: number) {
   return `${views} views`;
 }
 
+function formatSubscribers(count: number) {
+  if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M subscribers`;
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}K subscribers`;
+  return `${count} subscribers`;
+}
+
 function formatTimeAgo(dateString: string) {
   const date = new Date(dateString);
   const now = new Date();
@@ -76,12 +92,6 @@ function formatTimeAgo(dateString: string) {
   if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
   if (diffInDays < 365) return `${Math.floor(diffInDays / 30)} months ago`;
   return `${Math.floor(diffInDays / 365)} years ago`;
-}
-
-function formatSubscribers(count: number) {
-  if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M subscribers`;
-  if (count >= 1000) return `${(count / 1000).toFixed(1)}K subscribers`;
-  return `${count} subscribers`;
 }
 
 export default function DashboardWatchVideo() {
@@ -99,6 +109,7 @@ export default function DashboardWatchVideo() {
   const [fetching, setFetching] = useState(true);
   const [commentLoading, setCommentLoading] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
+  const [showRelatedVideos, setShowRelatedVideos] = useState(true);
 
   // Fetch video, comments, and related videos on mount
   useEffect(() => {
@@ -123,8 +134,12 @@ export default function DashboardWatchVideo() {
           const likeResponse = await api.get(`/videos/${videoId}/like`);
           setIsLiked(likeResponse.data.isLiked || false);
           setIsDisliked(likeResponse.data.isDisliked || false);
-          const subscribeResponse = await api.get(`/channels/${fetchedVideo.uploadedById}/subscribe`);
-          setIsSubscribed(subscribeResponse.data.isSubscribed || false);
+          
+          // Check program subscription status
+          if (fetchedVideo.programId) {
+            const subscribeResponse = await api.get(`/programs/${fetchedVideo.programId}/subscribe`);
+            setIsSubscribed(subscribeResponse.data.isSubscribed || false);
+          }
         }
 
         // Fetch comments if allowed
@@ -196,18 +211,23 @@ export default function DashboardWatchVideo() {
 
   const handleSubscribe = async () => {
     if (!user) {
-      message.error("Please log in to subscribe");
+      message.error("Please log in to subscribe to this program");
+      return;
+    }
+
+    if (!video?.programId) {
+      message.error("This video is not associated with a program");
       return;
     }
 
     try {
-      const response = await api.post(`/channels/${video?.uploadedById}/subscribe`);
+      const response = await api.post(`/programs/${video.programId}/subscribe`);
       setIsSubscribed(response.data.isSubscribed);
       setVideo((prev) => prev ? {
         ...prev,
-        subscribers: response.data.subscribers
+        programSubscribers: response.data.subscribers
       } : prev);
-      message.success(response.data.isSubscribed ? "Subscribed!" : "Unsubscribed!");
+      message.success(response.data.isSubscribed ? "Subscribed to program!" : "Unsubscribed from program!");
     } catch (error) {
       console.error("Failed to toggle subscription:", error);
       message.error("Failed to update subscription");
@@ -272,17 +292,17 @@ export default function DashboardWatchVideo() {
     );
   }
 
-  const programName = programs.find((p: Program) => p.id === (video.programId || video.program?.id))?.name || "Unknown";
+  const programName = programs.find((p: Program) => p.id === (video.programId || video.program?.id))?.name || "Unknown Program";
+  const programSubscribers = video.programSubscribers || video.program?.totalSubscribers || 0;
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 py-8">
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-3 space-y-6">
             {/* Video Player */}
-            <div className="aspect-video rounded-lg overflow-hidden border">
+            <div className="aspect-video bg-black rounded-lg overflow-hidden border">
               <video
                 controls
                 className="w-full h-full"
@@ -293,112 +313,129 @@ export default function DashboardWatchVideo() {
               </video>
             </div>
 
-            {/* Video Stats and Actions */}
-            <Card>
-              <CardContent className="pt-6 flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-4 text-sm text-gray-600">
-                  <span>{formatViews(video.views || 0)}</span>
-                  <span>{programName}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant={isLiked ? "default" : "outline"}
-                    onClick={handleLikeToggle}
-                    disabled={!user}
-                  >
-                    <ThumbsUp className={`size-4 mr-2 ${isLiked ? "fill-current" : ""}`} />
-                    {video.likes?.toLocaleString() || 0}
-                  </Button>
-                  <Button
-                    variant={isDisliked ? "default" : "outline"}
-                    onClick={handleDislikeToggle}
-                    disabled={!user}
-                  >
-                    <ThumbsDown className={`size-4 mr-2 ${isDisliked ? "fill-current" : ""}`} />
-                    {video.dislikes?.toLocaleString() || 0}
-                  </Button>
-                  <Button variant="outline" disabled>
-                    <Share2 className="size-4 mr-2" />
-                    Share
-                  </Button>
-                  <Button variant="outline" disabled>
-                    <Download className="size-4 mr-2" />
-                    Download
-                  </Button>
-                  <Button variant="outline" disabled>
-                    <MoreHorizontal className="size-4" />
-                    <span className="sr-only">More options</span>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Video Title */}
+            <h1 className="text-xl font-bold text-foreground">{video.title}</h1>
 
-            {/* Channel Info */}
-            <Card>
-              <CardContent className="pt-6 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={video.channelAvatar || "https://picsum.photos/48/48"}
-                    alt={video.channelName || "Channel"}
-                    className="w-12 h-12 rounded-full"
-                  />
-                  <div>
-                    <h3 className="font-medium text-foreground">{video.channelName || "Unknown Channel"}</h3>
-                    <p className="text-sm text-gray-600">{formatSubscribers(video.subscribers || 0)}</p>
+            {/* Video Stats and Actions */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <span>{formatViews(video.views || 0)}</span>
+                <span>•</span>
+                <span>{formatTimeAgo(video.uploadedAt || new Date().toISOString())}</span>
+                <span>•</span>
+                <span>{programName}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant={isLiked ? "default" : "outline"}
+                  size="sm"
+                  onClick={handleLikeToggle}
+                  disabled={!user}
+                  className="flex items-center gap-1"
+                >
+                  <ThumbsUp className={`size-4 ${isLiked ? "fill-current" : ""}`} />
+                  <span>{video.likes?.toLocaleString() || 0}</span>
+                </Button>
+                <Button
+                  variant={isDisliked ? "default" : "outline"}
+                  size="sm"
+                  onClick={handleDislikeToggle}
+                  disabled={!user}
+                  className="flex items-center gap-1"
+                >
+                  <ThumbsDown className={`size-4 ${isDisliked ? "fill-current" : ""}`} />
+                  <span>{video.dislikes?.toLocaleString() || 0}</span>
+                </Button>
+                <Button variant="outline" size="sm" className="flex items-center gap-1">
+                  <Share2 className="size-4" />
+                  <span>Share</span>
+                </Button>
+                <Button variant="outline" size="sm" className="flex items-center gap-1">
+                  <Download className="size-4" />
+                  <span>Download</span>
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Program Info */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                  <span className="text-primary font-semibold">
+                    {programName.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-medium text-foreground">{programName}</h3>
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Users className="size-3" />
+                    <span>{formatSubscribers(programSubscribers)}</span>
                   </div>
                 </div>
-                <Button
-                  variant={isSubscribed ? "secondary" : "default"}
-                  onClick={handleSubscribe}
-                  disabled={!user}
-                >
-                  {isSubscribed ? "Subscribed" : "Subscribe"}
-                </Button>
-              </CardContent>
-            </Card>
+              </div>
+              <Button
+                variant={isSubscribed ? "secondary" : "default"}
+                onClick={handleSubscribe}
+                disabled={!user || !video.programId}
+              >
+                {isSubscribed ? "Subscribed" : "Subscribe"}
+              </Button>
+            </div>
 
             {/* Description */}
-            <Card>
-              <CardContent className="pt-6 space-y-4">
-                <div className="flex items-center gap-4 text-sm text-gray-600">
-                  <span>{formatViews(video.views || 0)}</span>
+            <Card className="bg-muted/30">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
                   <span>{formatTimeAgo(video.uploadedAt || new Date().toISOString())}</span>
                 </div>
-                <p className={showDescription ? "text-foreground" : "text-foreground line-clamp-3"}>
-                  {video.description || "No description"}
-                </p>
-                {video.tags?.length && showDescription && (
-                  <div className="flex flex-wrap gap-2">
+                <div className={showDescription ? "text-foreground" : "text-foreground line-clamp-3"}>
+                  {video.description || "No description available"}
+                </div>
+                {video.tags?.length > 0 && showDescription && (
+                  <div className="flex flex-wrap gap-2 mt-3">
                     {video.tags.map((tag) => (
-                      <Badge key={tag} variant="outline">
+                      <Badge key={tag} variant="secondary" className="text-xs">
                         {tag}
                       </Badge>
                     ))}
                   </div>
                 )}
-                <Button
-                  variant="link"
-                  onClick={() => setShowDescription(!showDescription)}
-                  className="text-primary hover:underline"
-                >
-                  {showDescription ? "Show less" : "Show more"}
-                </Button>
+                {video.description && video.description.length > 150 && (
+                  <Button
+                    variant="link"
+                    onClick={() => setShowDescription(!showDescription)}
+                    className="px-0 text-primary hover:no-underline mt-2"
+                  >
+                    {showDescription ? "Show less" : "Show more"}
+                  </Button>
+                )}
               </CardContent>
             </Card>
 
             {/* Comments Section */}
             {video.allowComments ? (
               <Card>
-                <CardHeader>
-                  <CardTitle>Comments ({comments.length})</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageSquare className="size-5" />
+                    Comments {comments.length > 0 && `(${comments.length})`}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex gap-3">
-                    <img
-                      src={user?.id ? `https://picsum.photos/40/40?random=${user.id}` : "https://picsum.photos/40/40"}
-                      alt="Your avatar"
-                      className="w-10 h-10 rounded-full"
-                    />
+                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {user?.avatar ? (
+                        <img
+                          src={user.avatar}
+                          alt="Your avatar"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <User className="size-5 text-muted-foreground" />
+                      )}
+                    </div>
                     <div className="flex-1 space-y-3">
                       <Textarea
                         placeholder="Add a comment..."
@@ -413,12 +450,14 @@ export default function DashboardWatchVideo() {
                             variant="outline"
                             onClick={() => setNewComment("")}
                             disabled={commentLoading}
+                            size="sm"
                           >
                             Cancel
                           </Button>
                           <Button
                             onClick={handleCommentSubmit}
                             disabled={commentLoading || !newComment.trim()}
+                            size="sm"
                           >
                             {commentLoading ? (
                               <>
@@ -433,139 +472,168 @@ export default function DashboardWatchVideo() {
                       )}
                     </div>
                   </div>
-                  <ScrollArea className="h-[400px] pr-4">
-                    {comments.length > 0 ? (
-                      comments.map((comment) => (
+                  
+                  {comments.length > 0 ? (
+                    <ScrollArea className="h-[400px] pr-4">
+                      {comments.map((comment) => (
                         <div key={comment.id} className="mb-4">
-                          <div className="flex items-center gap-2">
-                            <img
-                              src={comment.userAvatar}
-                              alt={comment.username}
-                              className="w-8 h-8 rounded-full"
-                            />
-                            <div>
-                              <span className="font-medium text-foreground">@{comment.username}</span>
-                              <span className="text-sm text-gray-600 ml-2">
-                                {formatTimeAgo(comment.createdAt)}
-                              </span>
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
+                              {comment.userAvatar ? (
+                                <img
+                                  src={comment.userAvatar}
+                                  alt={comment.username}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <User className="size-4 text-muted-foreground" />
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-foreground text-sm">@{comment.username}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {formatTimeAgo(comment.createdAt)}
+                                </span>
+                              </div>
+                              <p className="text-foreground mt-1 text-sm">{comment.content}</p>
+                              <div className="flex items-center gap-4 mt-2">
+                                <Button variant="ghost" size="sm" className="h-8 px-2">
+                                  <ThumbsUp className="size-3 mr-1" />
+                                  <span className="text-xs">{comment.likes}</span>
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-8 px-2">
+                                  <ThumbsDown className="size-3 mr-1" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
+                                  Reply
+                                </Button>
+                              </div>
                             </div>
                           </div>
-                          <p className="text-foreground mt-1">{comment.content}</p>
-                          <div className="flex items-center gap-4 mt-2">
-                            <Button variant="ghost" size="sm" disabled>
-                              <ThumbsUp className="size-4 mr-1" />
-                              {comment.likes}
-                            </Button>
-                            <Button variant="ghost" size="sm" disabled>
-                              <ThumbsDown className="size-4 mr-1" />
-                            </Button>
-                            <Button variant="ghost" size="sm" disabled>
-                              Reply
-                            </Button>
-                          </div>
-                          <Separator className="my-2" />
+                          <Separator className="my-3" />
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-gray-600">No comments yet.</p>
-                    )}
-                  </ScrollArea>
+                      ))}
+                    </ScrollArea>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                      <MessageSquare className="size-12 mb-2 opacity-50" />
+                      <p>No comments yet</p>
+                      <p className="text-sm">Be the first to comment</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ) : (
-              <p className="text-gray-600">Comments are disabled for this video.</p>
+              <Card>
+                <CardContent className="pt-6 flex flex-col items-center justify-center py-8 text-muted-foreground">
+                  <MessageSquare className="size-12 mb-2 opacity-50" />
+                  <p>Comments are disabled for this video</p>
+                </CardContent>
+              </Card>
             )}
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Related Videos */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Related Videos</CardTitle>
+            <Card className={relatedVideos.length === 0 ? "h-auto" : ""}>
+              <CardHeader className="pb-3">
+                <div 
+                  className="flex items-center justify-between cursor-pointer"
+                  onClick={() => setShowRelatedVideos(!showRelatedVideos)}
+                >
+                  <CardTitle>Related Videos</CardTitle>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    {showRelatedVideos ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[600px]">
-                  {relatedVideos.map((relatedVideo) => (
-                    <div
-                      key={relatedVideo.id}
-                      className="flex gap-2 mb-4 cursor-pointer hover:bg-accent p-2 rounded-lg transition-colors"
-                      onClick={() => handleRelatedVideoClick(relatedVideo.id)}
-                    >
-                      <div className="relative flex-shrink-0">
-                        <img
-                          src={relatedVideo.thumbnailUrl}
-                          alt={relatedVideo.title}
-                          className="w-40 h-24 object-cover rounded-lg"
-                        />
-                        <div className="absolute bottom-1 right-1 bg-black bg-opacity-80 text-white text-xs px-1.5 py-0.5 rounded">
-                          {formatDuration(relatedVideo.duration)}
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <h3 className="font-medium text-sm text-foreground line-clamp-2 hover:text-primary">
-                          {relatedVideo.title}
-                        </h3>
-                        <p className="text-xs text-gray-600">{relatedVideo.channelName}</p>
-                        <div className="flex items-center gap-1 text-xs text-gray-600">
-                          <span>{formatViews(relatedVideo.views)}</span>
-                          <span>•</span>
-                          <span>{formatTimeAgo(relatedVideo.uploadedAt)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </ScrollArea>
-              </CardContent>
-            </Card>
-
-            {/* Categories */}
-            {video.category?.length && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Categories</CardTitle>
-                </CardHeader>
+              {showRelatedVideos && (
                 <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {video.category.map((cat) => (
-                      <Badge key={cat} variant="secondary">
-                        {cat}
-                      </Badge>
-                    ))}
-                  </div>
+                  {relatedVideos.length > 0 ? (
+                    <div className="space-y-3">
+                      {relatedVideos.map((relatedVideo) => (
+                        <div
+                          key={relatedVideo.id}
+                          className="flex gap-3 cursor-pointer group"
+                          onClick={() => handleRelatedVideoClick(relatedVideo.id)}
+                        >
+                          <div className="relative flex-shrink-0 w-40 h-24 rounded-md overflow-hidden">
+                            <img
+                              src={relatedVideo.thumbnailUrl}
+                              alt={relatedVideo.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                            />
+                            <div className="absolute bottom-1 right-1 bg-black bg-opacity-80 text-white text-xs px-1 py-0.5 rounded">
+                              {formatDuration(relatedVideo.duration)}
+                            </div>
+                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200 flex items-center justify-center">
+                              <Play className="size-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" fill="white" />
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <h3 className="font-medium text-sm text-foreground line-clamp-2 group-hover:text-primary">
+                              {relatedVideo.title}
+                            </h3>
+                            <p className="text-xs text-muted-foreground">
+                              {programs.find(p => p.id === relatedVideo.programId)?.name || "Unknown Program"}
+                            </p>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <span>{formatViews(relatedVideo.views)}</span>
+                              <span>•</span>
+                              <span>{formatTimeAgo(relatedVideo.uploadedAt)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-4 text-muted-foreground text-center">
+                      <Play className="size-10 mb-2 opacity-50" />
+                      <p className="text-sm">No related videos found</p>
+                    </div>
+                  )}
                 </CardContent>
-              </Card>
-            )}
+              )}
+            </Card>
 
             {/* Video Details */}
             <Card>
-              <CardHeader>
-                <CardTitle>Video Details</CardTitle>
+              <CardHeader className="pb-3">
+                <CardTitle>Details</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Duration</span>
-                  <span className="text-foreground">{formatDuration(video.duration || 0)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Resolution</span>
-                  <span className="text-foreground">{video.resolution || "1080p"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Views</span>
-                  <span className="text-foreground">{formatViews(video.views || 0)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Likes</span>
-                  <span className="text-foreground">{video.likes?.toLocaleString() || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Dislikes</span>
-                  <span className="text-foreground">{video.dislikes?.toLocaleString() || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Program</span>
-                  <span className="text-foreground">{programName}</span>
+              <CardContent className="space-y-4">
+                {video.category?.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-foreground mb-2">Categories</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {video.category.map((cat) => (
+                        <Badge key={cat} variant="secondary" className="text-xs">
+                          {cat}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Duration</span>
+                    <span className="text-foreground">{formatDuration(video.duration || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Resolution</span>
+                    <span className="text-foreground">{video.resolution || "1080p"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Program</span>
+                    <span className="text-foreground">{programName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subscribers</span>
+                    <span className="text-foreground">{formatSubscribers(programSubscribers)}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
