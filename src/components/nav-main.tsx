@@ -45,7 +45,7 @@ export function NavMain({
             </Button>
           </SidebarMenuItem>
         </SidebarMenu>
-        <SidebarMenu>
+        <SidebarMenu className="mt-6">
           {items.map((item) => {
             const isActive = location.pathname === item.url;
             return (
@@ -53,7 +53,7 @@ export function NavMain({
                 <SidebarMenuButton
                   asChild
                   tooltip={item.title}
-                  className={isActive ? "bg-muted text-primary font-semibold" : ""}
+                  className={isActive ? "bg-muted text-primary font-semibold h-11" : "h-11"}
                 >
                   <Link to={item.url}>
                     {item.icon && <item.icon />}

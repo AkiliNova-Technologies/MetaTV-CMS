@@ -8,7 +8,6 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  // type UniqueIdentifier,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
@@ -34,6 +33,11 @@ import {
   IconAlertCircle,
   IconVideo,
   IconUsers,
+  IconEdit,
+  IconTrash,
+  IconCheck,
+  IconX,
+  IconCalendar,
 } from "@tabler/icons-react";
 import {
   flexRender,
@@ -57,18 +61,8 @@ import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -96,6 +90,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import { useForm } from "react-hook-form";
 import { programSchema } from "@/constants/Schemas";
 import api from "@/utils/api";
@@ -115,10 +110,13 @@ import { useReduxPrograms } from "@/hooks/useReduxPrograms";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
+  SheetFooter,
 } from "./ui/sheet";
+import { toast } from "sonner";
 
 // Define the Program type based on your model
 type Program = z.infer<typeof programSchema> & {
@@ -170,64 +168,89 @@ function DraggableRow({ row }: { row: Row<Program> }) {
 }
 
 // Program Card Component
-function ProgramCard({ program }: { program: Program }) {
+function ProgramCard({ 
+  program, 
+  onEdit, 
+  onDelete 
+}: { 
+  program: Program;
+  onEdit: (program: Program) => void;
+  onDelete: (programId: number) => void;
+}) {
   const date = new Date(program.createdAt);
   const formatted = date.toLocaleString(undefined, {
     year: "numeric",
     month: "short",
     day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
   });
 
   return (
-    <Card className="w-full">
-      <CardHeader className="pb-0">
-        <div className="flex items-center gap-3">
-          <div className="size-10 rounded-lg border-1 flex items-center justify-center text-white font-semibold">
-            {program.name.charAt(0).toUpperCase()}
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-md">{program.name}</h3>
+    <Card className="group hover:shadow-lg transition-all duration-300 border-1 hover:border-primary/20">
+      <CardHeader className="pb-4">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="size-12 rounded-xl bg-input flex items-center justify-center text-white font-bold text-lg shadow-lg">
+              {program.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">
+                {program.name}
+              </h3>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                <IconCalendar className="size-3" />
+                {formatted}
+              </div>
+            </div>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-8">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="size-8 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
                 <IconDotsVertical className="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>Edit</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit(program)}>
+                <IconEdit className="size-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-600">
+              <DropdownMenuItem 
+                className="text-red-600 focus:text-red-600"
+                onClick={() => onDelete(program.id)}
+              >
+                <IconTrash className="size-4 mr-2" />
                 Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <p className="text-xs text-muted-foreground line-clamp-3 break-words">
-          {program.description || "No description"}
+        
+        <p className="text-sm text-muted-foreground line-clamp-2 min-h-[40px]">
+          {program.description || "No description provided"}
         </p>
       </CardHeader>
+      
       <CardContent className="pt-0">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Videos:</span>
-            <Badge variant="outline" className="text-xs px-1.5">
-              <IconVideo className="size-3 mr-1" />
-              {program.videos.length}
-            </Badge>
+        <Separator className="mb-4" />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col items-center p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+            <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+              <IconVideo className="size-4" />
+              <span className="text-xs font-medium">Videos</span>
+            </div>
+            <span className="text-2xl font-bold">{program.videos.length}</span>
           </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Subscribers:</span>
-            <Badge variant="outline" className="text-xs px-1.5">
-              <IconUsers className="size-3 mr-1" />
-              {program.subscribers.length}
-            </Badge>
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Created:</span>
-            <span>{program.createdAt ? formatted : "N/A"}</span>
+          
+          <div className="flex flex-col items-center p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+            <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+              <IconUsers className="size-4" />
+              <span className="text-xs font-medium">Subscribers</span>
+            </div>
+            <span className="text-2xl font-bold">{program.subscribers.length}</span>
           </div>
         </div>
       </CardContent>
@@ -239,9 +262,11 @@ function ProgramCard({ program }: { program: Program }) {
 function DeleteProgramDialog({
   program,
   onDelete,
+  trigger,
 }: {
   program: Program;
   onDelete: (programId: number) => void;
+  trigger?: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -251,9 +276,11 @@ function DeleteProgramDialog({
     try {
       await api.delete(`/programs/${program.id}`);
       onDelete(program.id);
+      toast.success("Program deleted successfully");
       setIsOpen(false);
     } catch (err) {
       console.error("Failed to delete program:", err);
+      toast.error("Failed to delete program");
     } finally {
       setIsDeleting(false);
     }
@@ -262,20 +289,32 @@ function DeleteProgramDialog({
   return (
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
       <AlertDialogTrigger asChild>
-        <DropdownMenuItem
-          className="text-red-600 cursor-pointer"
-          onSelect={(e) => e.preventDefault()}
-        >
-          Delete
-        </DropdownMenuItem>
+        {trigger || (
+          <DropdownMenuItem
+            className="text-red-600 focus:text-red-600 cursor-pointer"
+            onSelect={(e) => e.preventDefault()}
+          >
+            <IconTrash className="size-4 mr-2" />
+            Delete
+          </DropdownMenuItem>
+        )}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete the
-            program <span className="font-semibold">{program.name}</span> and
-            all associated data.
+          <AlertDialogTitle className="flex items-center gap-2">
+            <div className="size-10 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+              <IconAlertCircle className="size-5 text-red-600" />
+            </div>
+            Delete Program?
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-base pt-2">
+            Are you sure you want to delete <span className="font-semibold">{program.name}</span>? 
+            This action cannot be undone and will permanently remove:
+            <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+              <li>{program.videos.length} associated videos</li>
+              <li>{program.subscribers.length} subscriber connections</li>
+              <li>All program metadata and settings</li>
+            </ul>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -291,7 +330,10 @@ function DeleteProgramDialog({
                 Deleting...
               </>
             ) : (
-              "Delete Program"
+              <>
+                <IconTrash className="mr-2 h-4 w-4" />
+                Delete Program
+              </>
             )}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -300,7 +342,7 @@ function DeleteProgramDialog({
   );
 }
 
-// Add Program Drawer
+// Add Program Sheet with improved design
 export function AddProgramDrawer({
   onAddProgram,
   showTrigger = true,
@@ -313,6 +355,7 @@ export function AddProgramDrawer({
   onOpenChange?: (open: boolean) => void;
 }) {
   const [internalOpen, setInternalOpen] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const isControlled = open !== undefined;
   const isOpen = isControlled ? open : internalOpen;
 
@@ -323,110 +366,213 @@ export function AddProgramDrawer({
     handleSubmit,
     formState: { errors },
     reset,
+    watch,
   } = useForm<z.infer<typeof programSchema>>();
 
+  const formValues = watch();
+
   const onSubmit = async (data: z.infer<typeof programSchema>) => {
+    setIsSubmitting(true);
     try {
       const response = await api.post("/programs", data);
       onAddProgram(response.data);
+      toast.success("Program created successfully!");
       reset();
       setIsOpen(false);
     } catch (err) {
       console.error("Failed to add program:", err);
+      toast.error("Failed to create program");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const closeDrawer = () => setIsOpen(false);
+  const closeDrawer = () => {
+    if (!isSubmitting) {
+      setIsOpen(false);
+      reset();
+    }
+  };
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       {showTrigger && (
         <SheetTrigger asChild>
-          <Button variant="outline" size="sm">
-            <IconPlus />
+          <Button variant="default" size="sm" className="gap-2">
+            <IconPlus className="size-4" />
             <span className="hidden lg:inline">Add Program</span>
+            <span className="lg:hidden">Add</span>
           </Button>
         </SheetTrigger>
       )}
 
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto" side="right">
-        <SheetHeader className="space-y-1">
-          <SheetTitle className="flex items-center gap-2">
-            <IconTable className="size-5" />
-            Add New Program
-          </SheetTitle>
+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto" side="right">
+        <SheetHeader className="space-y-3 pb-6 border-b">
+          <div className="flex items-center gap-3">
+            <div className="size-12 rounded-xl bg-input flex items-center justify-center shadow-lg">
+              <IconPlus className="size-6 text-white" />
+            </div>
+            <div>
+              <SheetTitle className="text-2xl">Create New Program</SheetTitle>
+              <SheetDescription className="text-base">
+                Add a new program to organize your content
+              </SheetDescription>
+            </div>
+          </div>
         </SheetHeader>
 
-        <div className="flex flex-col gap-4 overflow-y-auto px-6 text-sm mt-6">
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="flex flex-col gap-4"
-          >
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="name">Program Name *</Label>
-              <Input
-                placeholder="program name"
-                id="name"
-                {...register("name", { required: "Program name is required" })}
-              />
-              {errors.name && (
-                <p className="text-red-500 text-xs">{errors.name.message}</p>
-              )}
-            </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-[calc(100vh-180px)]">
+          <div className="flex-1 overflow-y-auto py-6 px-6 space-y-6">
+            {/* Program Name */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <IconTable className="size-4" />
+                  Program Details
+                </CardTitle>
+                <CardDescription>
+                  Basic information about your program
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-sm font-medium">
+                    Program Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="name"
+                    placeholder="e.g., Morning Show, News Hour, Tech Reviews"
+                    {...register("name", { required: "Program name is required" })}
+                    className="text-base"
+                  />
+                  {errors.name && (
+                    <p className="text-destructive text-xs flex items-center gap-1">
+                      <IconAlertCircle className="size-3" />
+                      {errors.name.message}
+                    </p>
+                  )}
+                  {formValues.name && (
+                    <p className="text-xs text-muted-foreground">
+                      {formValues.name.length}/100 characters
+                    </p>
+                  )}
+                </div>
 
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                placeholder="description"
-                id="description"
-                {...register("description")}
-              />
-              {errors.description && (
-                <p className="text-red-500 text-xs">
-                  {errors.description.message}
-                </p>
-              )}
-            </div>
+                <Separator />
 
-            <div className="flex gap-3 pt-4 border-t mt-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={closeDrawer}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" className="flex-1">
-                Add Program
-              </Button>
-            </div>
-          </form>
-        </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-sm font-medium">
+                    Description
+                  </Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Describe what this program is about, its schedule, target audience, etc."
+                    {...register("description")}
+                    className="min-h-[120px] resize-none text-base"
+                  />
+                  {formValues.description && (
+                    <p className="text-xs text-muted-foreground">
+                      {formValues.description.length}/500 characters
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Preview Card */}
+            {formValues.name && (
+              <Card className="border-1 border-primary/20 bg-primary/5">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <IconCheck className="size-4" />
+                    Preview
+                  </CardTitle>
+                  <CardDescription>
+                    How your program will appear
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-start gap-3 p-4 rounded-lg border bg-background">
+                    <div className="size-12 rounded-xl bg-input flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                      {formValues.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-base">{formValues.name}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {formValues.description || "No description"}
+                      </p>
+                      <div className="flex items-center gap-3 mt-3">
+                        <Badge variant="secondary" className="text-xs">
+                          <IconVideo className="size-3 mr-1" />
+                          0 Videos
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          <IconUsers className="size-3 mr-1" />
+                          0 Subscribers
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Footer with actions */}
+          <SheetFooter className="border-t pt-6 flex-row gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeDrawer}
+              disabled={isSubmitting}
+              className="flex-1"
+            >
+              <IconX className="mr-2 size-4" />
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting || !formValues.name}
+              className="flex-1"
+            >
+              {isSubmitting ? (
+                <>
+                  <IconLoader className="mr-2 size-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <IconCheck className="mr-2 size-4" />
+                  Create Program
+                </>
+              )}
+            </Button>
+          </SheetFooter>
+        </form>
       </SheetContent>
     </Sheet>
   );
 }
 
-// Edit Program Drawer
-function ProgramTableCellViewer({
+// Edit Program Sheet with improved design
+function EditProgramSheet({
   program,
   onUpdateProgram,
+  trigger,
 }: {
   program: Program;
-  onUpdateProgram: (
-    program: z.infer<typeof programSchema> & { id: number }
-  ) => void;
+  onUpdateProgram: (program: z.infer<typeof programSchema> & { id: number }) => void;
+  trigger?: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isDirty },
     reset,
+    watch,
   } = useForm<z.infer<typeof programSchema>>({
     defaultValues: {
       name: program.name,
@@ -434,95 +580,180 @@ function ProgramTableCellViewer({
     },
   });
 
+  const formValues = watch();
+
   React.useEffect(() => {
     if (isOpen) {
       reset({
         name: program.name,
         description: program.description || "",
       });
-      setError(null);
     }
   }, [isOpen, program, reset]);
 
   const onSubmit = async (data: z.infer<typeof programSchema>) => {
     setIsSubmitting(true);
-    setError(null);
     try {
       await api.put(`/programs/${program.id}`, data);
       onUpdateProgram({ ...data, id: program.id });
+      toast.success("Program updated successfully!");
       setIsOpen(false);
     } catch (err) {
       console.error("Failed to update program:", err);
-      setError("Failed to update program. Please try again.");
+      toast.error("Failed to update program");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Drawer open={isOpen} onOpenChange={setIsOpen} direction="right">
-      <DrawerTrigger asChild>
-        <Button variant="link" className="text-foreground w-fit px-0 text-left">
-          {program.name}
-        </Button>
-      </DrawerTrigger>
-      <DrawerContent className="h-full w-full max-w-md ml-auto overflow-y-auto">
-        <DrawerHeader className="gap-1">
-          <DrawerTitle>Edit Program</DrawerTitle>
-          <DrawerDescription>
-            Update details for {program.name}
-          </DrawerDescription>
-        </DrawerHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
-          {error && (
-            <Alert variant="destructive">
-              <IconAlertCircle className="h-4 w-4" />
-              <AlertTitle>Update Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="flex flex-col gap-4"
-          >
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="name">Program Name *</Label>
-              <Input
-                id="name"
-                {...register("name", { required: "Program name is required" })}
-              />
-              {errors.name && (
-                <p className="text-red-500 text-xs">{errors.name.message}</p>
-              )}
+    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <SheetTrigger asChild>
+        {trigger || (
+          <Button variant="link" className="text-foreground px-0 h-auto font-normal">
+            {program.name}
+          </Button>
+        )}
+      </SheetTrigger>
+      
+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto" side="right">
+        <SheetHeader className="space-y-3 pb-6 border-b">
+          <div className="flex items-center gap-3">
+            <div className="size-12 rounded-xl bg-input flex items-center justify-center text-white font-bold text-lg shadow-lg">
+              {program.name.charAt(0).toUpperCase()}
             </div>
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="description">Description</Label>
-              <Textarea id="description" {...register("description")} />
-              {errors.description && (
-                <p className="text-red-500 text-xs">
-                  {errors.description.message}
-                </p>
-              )}
+            <div>
+              <SheetTitle className="text-2xl">Edit Program</SheetTitle>
+              <SheetDescription className="text-base">
+                Update details for {program.name}
+              </SheetDescription>
             </div>
-            <DrawerFooter className="px-0 mt-6">
-              <Button type="submit" disabled={isSubmitting || !isDirty}>
-                {isSubmitting ? (
-                  <>
-                    <IconLoader className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save Changes"
-                )}
-              </Button>
-              <DrawerClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DrawerClose>
-            </DrawerFooter>
-          </form>
-        </div>
-      </DrawerContent>
-    </Drawer>
+          </div>
+        </SheetHeader>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-[calc(100vh-180px)]">
+          <div className="flex-1 overflow-y-auto py-6 px-6 space-y-6">
+            {/* Program Statistics */}
+            <Card className="border-2">
+              <CardHeader>
+                <CardTitle className="text-base">Current Statistics</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col items-center p-4 rounded-lg bg-muted">
+                    <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                      <IconVideo className="size-4" />
+                      <span className="text-xs font-medium">Videos</span>
+                    </div>
+                    <span className="text-3xl font-bold">{program.videos.length}</span>
+                  </div>
+                  
+                  <div className="flex flex-col items-center p-4 rounded-lg bg-muted">
+                    <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                      <IconUsers className="size-4" />
+                      <span className="text-xs font-medium">Subscribers</span>
+                    </div>
+                    <span className="text-3xl font-bold">{program.subscribers.length}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Edit Form */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <IconEdit className="size-4" />
+                  Program Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name" className="text-sm font-medium">
+                    Program Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="edit-name"
+                    {...register("name", { required: "Program name is required" })}
+                    className="text-base"
+                  />
+                  {errors.name && (
+                    <p className="text-destructive text-xs flex items-center gap-1">
+                      <IconAlertCircle className="size-3" />
+                      {errors.name.message}
+                    </p>
+                  )}
+                  {formValues.name && (
+                    <p className="text-xs text-muted-foreground">
+                      {formValues.name.length}/100 characters
+                    </p>
+                  )}
+                </div>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-description" className="text-sm font-medium">
+                    Description
+                  </Label>
+                  <Textarea
+                    id="edit-description"
+                    {...register("description")}
+                    className="min-h-[120px] resize-none text-base"
+                  />
+                  {formValues.description && (
+                    <p className="text-xs text-muted-foreground">
+                      {formValues.description.length}/500 characters
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Changes Alert */}
+            {isDirty && (
+              <Alert>
+                <IconAlertCircle className="h-4 w-4" />
+                <AlertTitle>Unsaved Changes</AlertTitle>
+                <AlertDescription>
+                  You have unsaved changes. Don't forget to save before closing.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          <SheetFooter className="border-t pt-6 flex-row gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              disabled={isSubmitting}
+              className="flex-1"
+            >
+              <IconX className="mr-2 size-4" />
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting || !isDirty || !formValues.name}
+              className="flex-1"
+            >
+              {isSubmitting ? (
+                <>
+                  <IconLoader className="mr-2 size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <IconCheck className="mr-2 size-4" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -536,16 +767,14 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
   const [data, setData] = React.useState<Program[]>(programs);
   const [viewMode, setViewMode] = React.useState<"table" | "card">("table");
   const [rowSelection, setRowSelection] = React.useState({});
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({});
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
-  );
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
   });
+  const [editingProgram, setEditingProgram] = React.useState<Program | null>(null);
 
   const sortableId = React.useId();
   const sensors = useSensors(
@@ -635,7 +864,7 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
         id: "name",
         header: "Name",
         cell: ({ row }) => (
-          <ProgramTableCellViewer
+          <EditProgramSheet
             program={row.original}
             onUpdateProgram={handleUpdateProgram}
           />
@@ -646,16 +875,16 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
         accessorKey: "description",
         header: "Description",
         cell: ({ row }) => (
-          <Label className="truncate max-w-xs">
+          <span className="text-sm text-muted-foreground line-clamp-2 max-w-xs">
             {row.original.description || "No description"}
-          </Label>
+          </span>
         ),
       },
       {
         accessorKey: "videos",
         header: "Videos",
         cell: ({ row }) => (
-          <Badge variant="outline" className="text-muted-foreground px-1.5">
+          <Badge variant="outline" className="text-muted-foreground">
             <IconVideo className="size-3 mr-1" />
             {row.original.videos.length}
           </Badge>
@@ -665,7 +894,7 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
         accessorKey: "subscribers",
         header: "Subscribers",
         cell: ({ row }) => (
-          <Badge variant="outline" className="text-muted-foreground px-1.5">
+          <Badge variant="outline" className="text-muted-foreground">
             <IconUsers className="size-3 mr-1" />
             {row.original.subscribers.length}
           </Badge>
@@ -680,10 +909,8 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
             year: "numeric",
             month: "short",
             day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
           });
-          return <Label>{formatted}</Label>;
+          return <span className="text-sm">{formatted}</span>;
         },
       },
       {
@@ -700,8 +927,11 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-32">
-              <DropdownMenuItem>Edit</DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => setEditingProgram(row.original)}>
+                <IconEdit className="size-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DeleteProgramDialog
                 program={row.original}
@@ -752,229 +982,250 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
   }
 
   return (
-    <Tabs
-      defaultValue="table"
-      className="w-full flex-col justify-start gap-6"
-      value={viewMode}
-      onValueChange={(value) => setViewMode(value as "table" | "card")}
-    >
-      <div className="flex items-center justify-between px-4 lg:px-6">
-        <Select
-          value={viewMode}
-          onValueChange={(value) => setViewMode(value as "table" | "card")}
-        >
-          <SelectTrigger className="flex w-fit @4xl/main:hidden" size="sm">
-            <SelectValue placeholder="Select a view" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="table">Table View</SelectItem>
-            <SelectItem value="card">Card View</SelectItem>
-          </SelectContent>
-        </Select>
-        <TabsList className="hidden @4xl/main:flex">
-          <TabsTrigger value="table" className="flex items-center gap-2">
-            <IconTable className="size-4" />
-            Table View
-          </TabsTrigger>
-          <TabsTrigger value="card" className="flex items-center gap-2">
-            <IconLayoutGrid className="size-4" />
-            Card View
-          </TabsTrigger>
-        </TabsList>
-        <div className="flex items-center gap-2">
-          {viewMode === "table" && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <IconLayoutColumns />
-                  <span className="hidden lg:inline">Customize Columns</span>
-                  <span className="lg:hidden">Columns</span>
-                  <IconChevronDown />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {table
-                  .getAllColumns()
-                  .filter(
-                    (column) =>
-                      typeof column.accessorFn !== "undefined" &&
-                      column.getCanHide()
-                  )
-                  .map((column) => (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      className="capitalize"
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) =>
-                        column.toggleVisibility(!!value)
-                      }
-                    >
-                      {column.id}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          <AddProgramDrawer onAddProgram={handleAddProgram} />
-        </div>
-      </div>
-
-      <TabsContent
-        value="table"
-        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
+    <>
+      <Tabs
+        defaultValue="table"
+        className="w-full flex-col justify-start gap-6"
+        value={viewMode}
+        onValueChange={(value) => setViewMode(value as "table" | "card")}
       >
-        <div className="overflow-hidden rounded-lg border">
-          <DndContext
-            collisionDetection={closestCenter}
-            modifiers={[restrictToVerticalAxis]}
-            onDragEnd={handleDragEnd}
-            sensors={sensors}
-            id={sortableId}
+        <div className="flex items-center justify-between px-4 lg:px-6">
+          <Select
+            value={viewMode}
+            onValueChange={(value) => setViewMode(value as "table" | "card")}
           >
-            <Table>
-              <TableHeader className="bg-muted sticky top-0 z-10">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id} colSpan={header.colSpan}>
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                      </TableHead>
+            <SelectTrigger className="flex w-fit @4xl/main:hidden" size="sm">
+              <SelectValue placeholder="Select a view" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="table">Table View</SelectItem>
+              <SelectItem value="card">Card View</SelectItem>
+            </SelectContent>
+          </Select>
+          <TabsList className="hidden @4xl/main:flex">
+            <TabsTrigger value="table" className="flex items-center gap-2">
+              <IconTable className="size-4" />
+              Table View
+            </TabsTrigger>
+            <TabsTrigger value="card" className="flex items-center gap-2">
+              <IconLayoutGrid className="size-4" />
+              Card View
+            </TabsTrigger>
+          </TabsList>
+          <div className="flex items-center gap-2">
+            {viewMode === "table" && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <IconLayoutColumns className="size-4" />
+                    <span className="hidden lg:inline">Columns</span>
+                    <IconChevronDown className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {table
+                    .getAllColumns()
+                    .filter(
+                      (column) =>
+                        typeof column.accessorFn !== "undefined" &&
+                        column.getCanHide()
+                    )
+                    .map((column) => (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        className="capitalize"
+                        checked={column.getIsVisible()}
+                        onCheckedChange={(value) =>
+                          column.toggleVisibility(!!value)
+                        }
+                      >
+                        {column.id}
+                      </DropdownMenuCheckboxItem>
                     ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows?.length ? (
-                  <SortableContext
-                    items={dataIds}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {table.getRowModel().rows.map((row) => (
-                      <DraggableRow key={row.id} row={row} />
-                    ))}
-                  </SortableContext>
-                ) : loading ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={columns.length}
-                      className="h-24 text-center text-muted-foreground"
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <IconLoader className="animate-spin size-8 text-muted-foreground" />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={columns.length}
-                      className="h-24 text-center text-muted-foreground"
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <span>No programs found.</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </DndContext>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <AddProgramDrawer onAddProgram={handleAddProgram} />
+          </div>
         </div>
 
-        <div className="flex items-center justify-between px-4">
-          <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} row(s) selected.
-          </div>
-          <div className="flex w-full items-center gap-8 lg:w-fit">
-            <div className="hidden items-center gap-2 lg:flex">
-              <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                Rows per page
-              </Label>
-              <Select
-                value={`${table.getState().pagination.pageSize}`}
-                onValueChange={(value) => table.setPageSize(Number(value))}
-              >
-                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                  <SelectValue
-                    placeholder={table.getState().pagination.pageSize}
-                  />
-                </SelectTrigger>
-                <SelectContent side="top">
-                  {[10, 20, 30, 40, 50].map((pageSize) => (
-                    <SelectItem key={pageSize} value={`${pageSize}`}>
-                      {pageSize}
-                    </SelectItem>
+        <TabsContent
+          value="table"
+          className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
+        >
+          <div className="overflow-hidden rounded-lg border">
+            <DndContext
+              collisionDetection={closestCenter}
+              modifiers={[restrictToVerticalAxis]}
+              onDragEnd={handleDragEnd}
+              sensors={sensors}
+              id={sortableId}
+            >
+              <Table>
+                <TableHeader className="bg-muted sticky top-0 z-10">
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id} colSpan={header.colSpan}>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                        </TableHead>
+                      ))}
+                    </TableRow>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex w-fit items-center justify-center text-sm font-medium">
-              Page {table.getState().pagination.pageIndex + 1} of{" "}
-              {table.getPageCount()}
-            </div>
-            <div className="ml-auto flex items-center gap-2 lg:ml-0">
-              <Button
-                variant="outline"
-                className="hidden h-8 w-8 p-0 lg:flex"
-                onClick={() => table.setPageIndex(0)}
-                disabled={!table.getCanPreviousPage()}
-              >
-                <span className="sr-only">Go to first page</span>
-                <IconChevronsLeft />
-              </Button>
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                <span className="sr-only">Go to previous page</span>
-                <IconChevronLeft />
-              </Button>
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                <span className="sr-only">Go to next page</span>
-                <IconChevronRight />
-              </Button>
-              <Button
-                variant="outline"
-                className="hidden size-8 lg:flex"
-                size="icon"
-                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                disabled={!table.getCanNextPage()}
-              >
-                <span className="sr-only">Go to last page</span>
-                <IconChevronsRight />
-              </Button>
-            </div>
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows?.length ? (
+                    <SortableContext
+                      items={dataIds}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {table.getRowModel().rows.map((row) => (
+                        <DraggableRow key={row.id} row={row} />
+                      ))}
+                    </SortableContext>
+                  ) : loading ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={columns.length}
+                        className="h-24 text-center text-muted-foreground"
+                      >
+                        <div className="flex flex-col items-center gap-2">
+                          <IconLoader className="animate-spin size-8 text-muted-foreground" />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={columns.length}
+                        className="h-24 text-center text-muted-foreground"
+                      >
+                        <div className="flex flex-col items-center gap-2">
+                          <span>No programs found.</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </DndContext>
           </div>
-        </div>
-      </TabsContent>
 
-      <TabsContent value="card" className="flex flex-col px-4 lg:px-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {data.map((program) => (
-            <ProgramCard key={program.id} program={program} />
-          ))}
-        </div>
-        {data.length === 0 && (
-          <div className="flex items-center justify-center h-32 text-muted-foreground">
-            No programs found.
+          <div className="flex items-center justify-between px-4">
+            <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
+              {table.getFilteredSelectedRowModel().rows.length} of{" "}
+              {table.getFilteredRowModel().rows.length} row(s) selected.
+            </div>
+            <div className="flex w-full items-center gap-8 lg:w-fit">
+              <div className="hidden items-center gap-2 lg:flex">
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">
+                  Rows per page
+                </Label>
+                <Select
+                  value={`${table.getState().pagination.pageSize}`}
+                  onValueChange={(value) => table.setPageSize(Number(value))}
+                >
+                  <SelectTrigger size="sm" className="w-20" id="rows-per-page">
+                    <SelectValue
+                      placeholder={table.getState().pagination.pageSize}
+                    />
+                  </SelectTrigger>
+                  <SelectContent side="top">
+                    {[10, 20, 30, 40, 50].map((pageSize) => (
+                      <SelectItem key={pageSize} value={`${pageSize}`}>
+                        {pageSize}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex w-fit items-center justify-center text-sm font-medium">
+                Page {table.getState().pagination.pageIndex + 1} of{" "}
+                {table.getPageCount()}
+              </div>
+              <div className="ml-auto flex items-center gap-2 lg:ml-0">
+                <Button
+                  variant="outline"
+                  className="hidden h-8 w-8 p-0 lg:flex"
+                  onClick={() => table.setPageIndex(0)}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  <span className="sr-only">Go to first page</span>
+                  <IconChevronsLeft />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="size-8"
+                  size="icon"
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  <span className="sr-only">Go to previous page</span>
+                  <IconChevronLeft />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="size-8"
+                  size="icon"
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                >
+                  <span className="sr-only">Go to next page</span>
+                  <IconChevronRight />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="hidden size-8 lg:flex"
+                  size="icon"
+                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                  disabled={!table.getCanNextPage()}
+                >
+                  <span className="sr-only">Go to last page</span>
+                  <IconChevronsRight />
+                </Button>
+              </div>
+            </div>
           </div>
-        )}
-      </TabsContent>
-    </Tabs>
+        </TabsContent>
+
+        <TabsContent value="card" className="flex flex-col px-4 lg:px-6">
+          {data.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {data.map((program) => (
+                <ProgramCard
+                  key={program.id}
+                  program={program}
+                  onEdit={setEditingProgram}
+                  onDelete={handleDeleteProgram}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-64 text-center">
+              <IconTable className="size-16 text-muted-foreground/50 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No programs yet</h3>
+              <p className="text-muted-foreground mb-4">
+                Create your first program to get started
+              </p>
+              <AddProgramDrawer onAddProgram={handleAddProgram} showTrigger={true} />
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Edit Program Sheet (controlled) */}
+      {editingProgram && (
+        <EditProgramSheet
+          program={editingProgram}
+          onUpdateProgram={handleUpdateProgram}
+          trigger={<span />}
+        />
+      )}
+    </>
   );
 }

@@ -30,12 +30,12 @@ import {
   IconTable,
   IconLayoutGrid,
   IconPlus,
-  //   IconAlertCircle,
   IconSearch,
-  //   IconFilter,
   IconX,
   IconPlayerTrackNext,
   IconPlayerTrackPrev,
+  IconAlertCircle,
+  IconRefresh,
 } from "@tabler/icons-react";
 import {
   flexRender,
@@ -59,7 +59,13 @@ import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
@@ -71,6 +77,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -87,6 +94,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import api from "@/utils/api";
 import {
   AlertDialog,
@@ -108,12 +122,22 @@ import {
   Music,
   Eye,
   Volume2,
+  VolumeX,
   Disc3,
   Upload,
   Calendar,
   Tag,
   ImageIcon,
   FileAudio,
+  Clock,
+  Plus,
+  Download,
+  Share2,
+  CheckCircle2,
+  Info,
+  Volume1,
+  User,
+  Pen,
 } from "lucide-react";
 import type { musicSchema } from "@/constants/Schemas";
 import {
@@ -128,6 +152,8 @@ import { Textarea } from "./ui/textarea";
 import { useReduxMusic } from "@/hooks/useReduxMusic";
 import { toast } from "sonner";
 import { useReduxAuth } from "@/hooks/useReduxAuth";
+import { Progress } from "@/components/ui/progress";
+import { STORAGE_BUCKETS, storageUtils } from "@/config/supabase";
 
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -181,6 +207,70 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof musicSchema>> }) {
   );
 }
 
+// Improved Image Component
+function OptimizedImage({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(false);
+  const [retryCount, setRetryCount] = React.useState(0);
+
+  const handleRetry = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setError(false);
+    setLoading(true);
+    setRetryCount((prev) => prev + 1);
+  };
+
+  const imgSrc = retryCount > 0 ? `${src}?retry=${retryCount}` : src;
+
+  if (error) {
+    return (
+      <div
+        className={`flex flex-col items-center justify-center bg-muted ${className}`}
+      >
+        <IconAlertCircle className="size-6 text-muted-foreground mb-2" />
+        <Button variant="ghost" size="sm" onClick={handleRetry}>
+          <IconRefresh className="size-3 mr-1" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {loading && (
+        <div
+          className={`absolute inset-0 flex items-center justify-center bg-muted ${className}`}
+        >
+          <IconLoader className="animate-spin size-6 text-muted-foreground" />
+        </div>
+      )}
+      <img
+        src={imgSrc}
+        alt={alt}
+        className={`${className} ${
+          loading ? "opacity-0" : "opacity-100"
+        } transition-opacity duration-300`}
+        onLoad={() => setLoading(false)}
+        onError={() => {
+          setLoading(false);
+          setError(true);
+        }}
+        crossOrigin="anonymous"
+      />
+    </>
+  );
+}
+
+// Dramatically Improved Music Card
 export function MusicCard({
   music,
   isPlaying,
@@ -192,85 +282,192 @@ export function MusicCard({
   onPlayPause: (musicId: number) => void;
   onEdit: (music: z.infer<typeof musicSchema>) => void;
 }) {
-  const [isImageLoading] = React.useState(true);
-  const [imageError, setImageError] = React.useState(false);
-
   const handlePlayClick = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     onPlayPause(music.id);
   };
 
   return (
-    <Card className="flex items-start flex-row w-full h-[90px] px-2 py-2 bg-gradient-to-r from-background to-muted/20 hover:shadow-md border-muted/40 hover:border-primary/20 transition">
-      {/* Cover Image */}
+    <Card className="group relative min-w-[400px] w-[400px] max-w-[400px] max-h-[200px] flex-row gap-0 overflow-hidden py-0 bg-gradient-to-br from-card to-card/50 hover:shadow-2xl transition-all duration-500 ">
+      {/* Cover Image with Enhanced Overlay */}
       <div
-        className="relative flex-shrink-0 w-[70px] h-[70px] rounded-md overflow-hidden bg-muted cursor-pointer group"
+        className="relative min-w-[200px] max-w-[200px] aspect-square bg-gradient-to-br from-primary/5 via-muted to-primary/10 cursor-pointer overflow-hidden"
         onClick={handlePlayClick}
       >
-        {music.thumbnailUrl || imageError || isImageLoading ? (
-          <img
+        {music.thumbnailUrl ? (
+          <OptimizedImage
             src={music.thumbnailUrl}
             alt={`${music.title} cover`}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-            onError={() => setImageError(true)}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
         ) : (
-          <div className="flex items-center justify-center w-full h-full bg-muted/50">
-            <Disc3 className="size-8 text-muted-foreground" />
+          <div className="flex flex-col items-center justify-center w-full h-full gap-3">
+            <div className="relative">
+              <div className="absolute inset-0 bg-primary/20 rounded-full blur-2xl" />
+              <Disc3 className="size-20 text-primary relative animate-pulse" />
+            </div>
+            <Music className="size-8 text-muted-foreground/50" />
           </div>
         )}
 
-        {/* Play / Pause Overlay */}
-        <div className="absolute h-full inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <Button
-            size="icon"
-            className="bg-primary hover:bg-primary/90 rounded-full shadow-lg"
-            onClick={handlePlayClick}
-          >
-            {isPlaying ? (
-              <Pause className="size-4" />
-            ) : (
-              <Play className="size-4 ml-[1px]" />
-            )}
-          </Button>
+        {/* Play/Pause Button - Enhanced */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
+          <div className="relative">
+            {/* Button */}
+            <Button
+              size="icon"
+              className="relative size-16 rounded-full shadow-2xl hover:scale-110 transition-transform bg-card backdrop-blur-xs transition-all duration-300"
+              onClick={handlePlayClick}
+            >
+              {isPlaying ? (
+                <Pause className="size-8 text-white" fill="white" />
+              ) : (
+                <Play className="size-8 text-white ml-1" fill="white" />
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* Top Badges Row */}
+        <div className="absolute top-2 left-2 right-2 flex items-start justify-between">
+          {/* Playing Indicator with Wave Animation */}
+          {isPlaying && (
+            <Badge className="bg-green-500/90 backdrop-blur-sm border-0 shadow-lg gap-2">
+              <div className="flex items-center gap-0.5">
+                <div
+                  className="w-0.5 h-2 bg-white animate-pulse"
+                  style={{ animationDelay: "0ms" }}
+                />
+                <div
+                  className="w-0.5 h-3 bg-white animate-pulse"
+                  style={{ animationDelay: "150ms" }}
+                />
+                <div
+                  className="w-0.5 h-2 bg-white animate-pulse"
+                  style={{ animationDelay: "300ms" }}
+                />
+              </div>
+              <span className="text-white font-medium">Playing</span>
+            </Badge>
+          )}
+
+          {/* Visibility Badge */}
+          {music.visibility !== "PUBLIC" && (
+            <Badge
+              variant="secondary"
+              className="bg-black/60 backdrop-blur-sm border-0 text-white ml-auto"
+            >
+              <Lock className="size-3 mr-1" />
+              {music.visibility === "PRIVATE" ? "Private" : "Unlisted"}
+            </Badge>
+          )}
+        </div>
+
+        {/* Bottom Info Bar */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/50 to-transparent">
+          <div className="flex items-center justify-between text-white/90">
+            <div className="flex items-center gap-1.5 text-xs font-medium">
+              <Clock className="size-3.5" />
+              <span>{formatDuration(music.duration)}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-medium">
+              <Volume2 className="size-3.5" />
+              <span>{formatPlays(music.plays)}</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Title + Artist + Menu */}
-      <CardContent className="flex flex-1 items-center justify-between ml-0 pl-0 h-full">
-        <div
-          className="flex flex-col overflow-hidden cursor-pointer gap-1"
-          onClick={handlePlayClick}
-        >
-          <span className="font-semibold text-md truncate">{music.title}</span>
-          <span className="text-xs text-muted-foreground truncate">
+      {/* Track Info - Redesigned */}
+      <CardContent className="p-4 space-y-3 flex flex-1 flex-col max-w-[200px]">
+        {/* Title & Artist */}
+        <div className="space-y-1.5">
+          <h3
+            className="font-bold text-base line-clamp-1 hover:text-primary cursor-pointer transition-colors leading-tight"
+            onClick={handlePlayClick}
+          >
+            {music.title}
+          </h3>
+          <p className="text-sm text-muted-foreground line-clamp-1 flex items-center gap-1.5">
+            <User className="size-3.5 flex-shrink-0" />
             {music.artist}
-          </span>
+          </p>
         </div>
 
-        {/* Dropdown Menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreVertical className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onPlayPause(music.id)}>
-              {isPlaying ? "Pause" : "Play"}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onEdit(music)}>
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem>Add to Playlist</DropdownMenuItem>
-            <DropdownMenuItem>Share</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Genre Tags - Improved */}
+        {music.genre && music.genre.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {music.genre.slice(0, 3).map((genre, index) => (
+              <Badge
+                key={index}
+                variant="outline"
+                className="text-xs px-2 py-0.5 font-medium border-primary/20 hover:bg-primary/10 transition-colors"
+              >
+                {genre}
+              </Badge>
+            ))}
+            {music.genre.length > 3 && (
+              <Badge
+                variant="outline"
+                className="text-xs px-2 py-0.5 text-muted-foreground"
+              >
+                +{music.genre.length - 3}
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {/* Action Buttons Row - More Prominent */}
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="hover:bg-primary/10"
+                  onClick={() => {}}
+                >
+                  <Share2 className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Share track</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="hover:bg-primary/10">
+                <MoreVertical className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => onEdit(music)}>
+                <Pen className="size-4 mr-2" />
+                Edit Details
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <Eye className="size-4 mr-2" />
+                View Stats
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Release Date - If Available */}
+        {music.released && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-2 border-t">
+            <Calendar className="size-3" />
+            <span>
+              Released{" "}
+              {new Date(music.released).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "short",
+              })}
+            </span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -287,8 +484,6 @@ function TableCellPlayer({
   onEdit: (music: z.infer<typeof musicSchema>) => void;
   isPlaying: boolean;
 }) {
-  // const navigate = useNavigate();
-
   const handlePlayClick = () => {
     onPlayPause(music.id);
   };
@@ -309,18 +504,12 @@ function TableCellPlayer({
         {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
       </Button>
       <div className="flex items-center gap-3 flex-1">
-        <div className="flex items-center justify-center w-[50px] h-[50px] bg-muted/50 rounded-md">
-          {music.thumbnailUrl ? (
-            <img
-              src={music.thumbnailUrl}
-              alt={music.title}
-              className="w-full h-full object-cover rounded-md"
-            />
-          ) : (
-            // <Disc3 className="size-8 text-muted-foreground" />
-            <Disc3 className="size-8 text-muted-foreground" />
-          )}
-        </div>
+        <Avatar className="size-16 rounded">
+          <AvatarImage src={music.thumbnailUrl} alt={music.title} className="object-cover object-top"/>
+          <AvatarFallback className="rounded">
+            <Disc3 className="size-6 text-muted-foreground" />
+          </AvatarFallback>
+        </Avatar>
 
         <div className="min-w-0 flex-1">
           <Button
@@ -363,9 +552,11 @@ function DeleteMusicDialog({
     try {
       await api.delete(`/music/${music.id}`);
       onDelete(music.id);
+      toast.success("Track deleted successfully");
       setIsOpen(false);
     } catch (err) {
       console.error("Failed to delete music:", err);
+      toast.error("Failed to delete track");
     } finally {
       setIsDeleting(false);
     }
@@ -375,21 +566,26 @@ function DeleteMusicDialog({
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
       <AlertDialogTrigger asChild>
         <DropdownMenuItem
-          className="text-red-600 cursor-pointer"
+          className="text-red-600 focus:text-red-600 cursor-pointer"
           onSelect={(e) => e.preventDefault()}
         >
+          <IconX className="size-4 mr-2" />
           Delete
         </DropdownMenuItem>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete{" "}
-            <span className="font-semibold">
-              "{music.title}" by {music.artist}
-            </span>{" "}
-            from the database.
+          <AlertDialogTitle className="flex items-center gap-2">
+            <div className="size-10 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+              <IconAlertCircle className="size-5 text-red-600" />
+            </div>
+            Delete Track?
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-base pt-2">
+            Are you sure you want to delete{" "}
+            <span className="font-semibold">"{music.title}"</span> by{" "}
+            <span className="font-semibold">{music.artist}</span>? This action
+            cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -405,7 +601,10 @@ function DeleteMusicDialog({
                 Deleting...
               </>
             ) : (
-              "Delete Track"
+              <>
+                <IconX className="mr-2 h-4 w-4" />
+                Delete Track
+              </>
             )}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -414,6 +613,7 @@ function DeleteMusicDialog({
   );
 }
 
+// Enhanced Upload Drawer with Multi-Step Wizard
 export function UploadMusicDrawer({
   onUploadSuccess,
   music: editingMusic,
@@ -430,6 +630,11 @@ export function UploadMusicDrawer({
   const { user } = useReduxAuth();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
+  const [uploadProgress, setUploadProgress] = React.useState(0);
+  const [currentStep, setCurrentStep] = React.useState<
+    "files" | "details" | "review"
+  >("files");
+
   const [formData, setFormData] = React.useState({
     title: editingMusic?.title || "",
     artist: editingMusic?.artist || "",
@@ -444,6 +649,11 @@ export function UploadMusicDrawer({
       : "",
     licensed: editingMusic?.licensed || "",
   });
+
+  // const [audioPreview, setAudioPreview] = React.useState<string | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = React.useState<string | null>(
+    null
+  );
   const [dragOver, setDragOver] = React.useState({
     audio: false,
     thumbnail: false,
@@ -476,6 +686,9 @@ export function UploadMusicDrawer({
           : "",
         licensed: editingMusic.licensed || "",
       });
+      if (editingMusic.thumbnailUrl) {
+        setThumbnailPreview(editingMusic.thumbnailUrl);
+      }
     }
   }, [editingMusic]);
 
@@ -483,6 +696,20 @@ export function UploadMusicDrawer({
     field: "audioFile" | "thumbnailFile",
     file: File | null
   ) => {
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      if (field === "thumbnailFile") {
+        setThumbnailPreview(previewUrl);
+      } else {
+        // setAudioPreview(previewUrl);
+      }
+    } else {
+      if (field === "thumbnailFile") {
+        setThumbnailPreview(null);
+      } else {
+        // setAudioPreview(null);
+      }
+    }
     setFormData((prev) => ({ ...prev, [field]: file }));
   };
 
@@ -520,72 +747,134 @@ export function UploadMusicDrawer({
 
       audio.addEventListener("error", () => {
         URL.revokeObjectURL(objectUrl);
-        resolve(0); // Fallback to 0 if extraction fails
+        resolve(0);
       });
 
       audio.src = objectUrl;
     });
   };
 
+  // Updated UploadMusicDrawer with Supabase integration
+  // Replace the handleSubmit function in your existing component with this
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.artist) return;
+    if (!formData.title || !formData.artist) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
 
-    // For updates, audio file is optional; for new uploads, it's required
-    if (!editingMusic && !formData.audioFile) return;
+    if (!editingMusic && !formData.audioFile) {
+      toast.error("Please select an audio file");
+      return;
+    }
 
     setIsUploading(true);
+    setUploadProgress(0);
+
     try {
-      const formDataToSend = new FormData();
-      formDataToSend.append("title", formData.title);
-      formDataToSend.append("artist", formData.artist);
-      formDataToSend.append("visibility", formData.visibility);
-      formDataToSend.append("licensed", formData.licensed);
-      formDataToSend.append("genre", JSON.stringify(formData.genre));
+      let audioUrl = editingMusic?.audioUrl || "";
+      let thumbnailUrl = editingMusic?.thumbnailUrl || "";
 
-      // Add the user ID from auth
-      if (user?.id) {
-        formDataToSend.append("uploadedById", user.id.toString());
-      }
-
-      if (formData.released) {
-        formDataToSend.append("released", formData.released);
-      }
-
-      // Extract duration on the frontend
+      // Upload audio file to Supabase if provided
       if (formData.audioFile) {
-        const duration = await extractAudioDuration(formData.audioFile);
-        formDataToSend.append("duration", duration.toString());
-        formDataToSend.append("music", formData.audioFile);
+        setUploadProgress(10);
+        toast.info("Uploading audio file...");
+
+        const audioUploadResult = await storageUtils.uploadFile(
+          STORAGE_BUCKETS.MUSIC,
+          formData.audioFile,
+          (progress) => {
+            setUploadProgress(10 + progress * 0.5); // 10-60%
+          }
+        );
+
+        audioUrl = audioUploadResult.url;
+        setUploadProgress(60);
+        toast.success("Audio uploaded!");
       }
 
+      // Upload thumbnail to Supabase if provided
       if (formData.thumbnailFile) {
-        formDataToSend.append("thumbnail", formData.thumbnailFile);
+        setUploadProgress(60);
+        toast.info("Uploading cover image...");
+
+        const thumbnailUploadResult = await storageUtils.uploadFile(
+          STORAGE_BUCKETS.THUMBNAILS,
+          formData.thumbnailFile,
+          (progress) => {
+            setUploadProgress(60 + progress * 0.2); // 60-80%
+          }
+        );
+
+        thumbnailUrl = thumbnailUploadResult.url;
+        setUploadProgress(80);
+        toast.success("Cover image uploaded!");
       }
 
+      // Extract duration from audio file if new file
+      let duration = editingMusic?.duration || 0;
+      if (formData.audioFile) {
+        duration = await extractAudioDuration(formData.audioFile);
+      }
+
+      setUploadProgress(85);
+      toast.info("Saving track details...");
+
+      // Prepare data for backend
+      const musicData = {
+        title: formData.title,
+        artist: formData.artist,
+        audioUrl: audioUrl,
+        thumbnailUrl: thumbnailUrl,
+        duration: duration,
+        genre: formData.genre,
+        visibility: formData.visibility,
+        released: formData.released || null,
+        licensed: formData.licensed || "",
+        uploadedById: user?.id,
+      };
+
+      setUploadProgress(90);
+
+      // Send to backend
       let response;
-
       if (editingMusic) {
-        // Update existing music
-        response = await api.put(`/music/${editingMusic.id}`, formDataToSend);
+        response = await api.put(`/music/${editingMusic.id}`, musicData, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
       } else {
-        // Create new music
-        response = await api.post("/music", formDataToSend);
+        response = await api.post("/music", musicData, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
       }
 
-      onUploadSuccess(response.data);
-      toast.success("Song uploaded successfully!");
+      setUploadProgress(100);
+
+      onUploadSuccess(response.data.music || response.data);
+
+      toast.success(
+        editingMusic
+          ? "Track updated successfully!"
+          : "Track uploaded successfully!"
+      );
+
       setIsOpen(false);
       resetForm();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Upload failed:", error);
 
-      // Provide user-friendly error messages
-      const errorMessage = "An error occurred during upload";
-
+      // Show specific error message
+      const errorMessage =
+        error.response?.data?.error || error.message || "Upload failed";
       toast.error(errorMessage);
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -600,6 +889,9 @@ export function UploadMusicDrawer({
       released: "",
       licensed: "",
     });
+    // setAudioPreview(null);
+    setThumbnailPreview(null);
+    setCurrentStep("files");
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -610,383 +902,589 @@ export function UploadMusicDrawer({
     }
   };
 
+  const canProceedToDetails = formData.audioFile || editingMusic;
+  const canProceedToReview = formData.title && formData.artist;
+
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
       {showTrigger && (
         <SheetTrigger asChild>
-          <Button variant="outline" size="sm">
-            <IconPlus />
+          <Button variant="default" size="sm" className="gap-2">
+            <IconPlus className="size-4" />
             <span className="hidden lg:inline">
               {editingMusic ? "Edit Track" : "Upload Track"}
             </span>
+            <span className="lg:hidden">Add</span>
           </Button>
         </SheetTrigger>
       )}
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-        <SheetHeader className="space-y-1">
-          <SheetTitle className="flex items-center gap-2">
-            <Upload className="size-5" />
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto px-6">
+        <SheetHeader className="space-y-3 px-0">
+          <SheetTitle className="flex items-center gap-2 text-xl">
+            <div className="size-12 rounded-xl bg-input flex items-center justify-center">
+              <Upload className="size-5 text-white" />
+            </div>
             {editingMusic ? "Edit Track" : "Upload New Track"}
           </SheetTitle>
           <SheetDescription>
             {editingMusic
-              ? "Update your music track details"
-              : "Upload your music track with all the necessary details"}
+              ? "Update your music track details and files"
+              : "Upload your music track with all necessary details"}
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-col gap-4 overflow-y-auto px-6 text-sm">
-          <form onSubmit={handleSubmit} className="space-y-6 mb-8">
-            {/* Audio File Upload */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <FileAudio className="size-4" />
-                Audio File {!editingMusic && "*"}
-              </Label>
-              <div
-                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer
-      ${
-        dragOver.audio
-          ? "border-primary bg-primary/5"
-          : "border-muted-foreground/25"
-      }
-    `}
-                onDrop={(e) => handleDrop(e, "audio")}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver((prev) => ({ ...prev, audio: true }));
-                }}
-                onDragLeave={() =>
-                  setDragOver((prev) => ({ ...prev, audio: false }))
-                }
-                onClick={() => audioInputRef.current?.click()}
-              >
-                <input
-                  ref={audioInputRef}
-                  type="file"
-                  accept="audio/*"
-                  className="hidden"
-                  onChange={(e) =>
-                    handleFileChange("audioFile", e.target.files?.[0] || null)
-                  }
-                />
-                <div className="text-sm text-muted-foreground">
-                  <Upload className="mx-auto size-6 mb-2" />
-                  Drag & drop audio file here or click to browse
-                  <div className="text-xs mt-1">Supports MP3, WAV, FLAC</div>
-                </div>
-              </div>
+        {/* Multi-Step Tabs */}
+        <Tabs
+          value={currentStep}
+          onValueChange={(v) => setCurrentStep(v as any)}
+          className="mt-6"
+        >
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="files" className="gap-2">
+              <FileAudio className="size-4" />
+              <span className="hidden sm:inline">Files</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="details"
+              disabled={!canProceedToDetails}
+              className="gap-2"
+            >
+              <Info className="size-4" />
+              <span className="hidden sm:inline">Details</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="review"
+              disabled={!canProceedToReview}
+              className="gap-2"
+            >
+              <CheckCircle2 className="size-4" />
+              <span className="hidden sm:inline">Review</span>
+            </TabsTrigger>
+          </TabsList>
 
-              {/* File info and remove button */}
-              {formData.audioFile && (
-                <div className="flex items-center space-x-2 mt-2 max-w-2xs text-foreground truncate p-2 bg-muted rounded-md">
-                  <FileAudio className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate flex-1">
-                    {formData.audioFile.name}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    type="button"
-                    onClick={() => handleFileChange("audioFile", null)}
-                    className="size-6 hover:bg-destructive hover:text-destructive-foreground"
+          <form onSubmit={handleSubmit} className="mt-6">
+            {/* FILES TAB */}
+            <TabsContent value="files" className="space-y-6">
+              {/* Audio File Upload */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileAudio className="size-4" />
+                    Audio File {!editingMusic && "*"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer
+                      ${
+                        dragOver.audio
+                          ? "border-primary bg-primary/10 scale-105"
+                          : "border-muted-foreground/25 hover:border-primary/50"
+                      }`}
+                    onDrop={(e) => handleDrop(e, "audio")}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOver((prev) => ({ ...prev, audio: true }));
+                    }}
+                    onDragLeave={() =>
+                      setDragOver((prev) => ({ ...prev, audio: false }))
+                    }
+                    onClick={() => audioInputRef.current?.click()}
                   >
-                    <IconX className="size-3" />
-                  </Button>
-                </div>
-              )}
-
-              {/* Show existing audio file info when editing */}
-              {editingMusic && !formData.audioFile && (
-                <div className="flex items-center space-x-2 mt-2 max-w-xs text-muted-foreground truncate p-2 bg-muted rounded-md">
-                  <FileAudio className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate flex-1">
-                    Using existing audio file
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Thumbnail Upload */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <ImageIcon className="size-4" />
-                Cover Image
-              </Label>
-              <div
-                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer
-              ${
-                dragOver.thumbnail
-                  ? "border-primary bg-primary/5"
-                  : "border-muted-foreground/25"
-              }
-              `}
-                onDrop={(e) => handleDrop(e, "thumbnail")}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver((prev) => ({ ...prev, thumbnail: true }));
-                }}
-                onDragLeave={() =>
-                  setDragOver((prev) => ({ ...prev, thumbnail: false }))
-                }
-                onClick={() => thumbnailInputRef.current?.click()}
-              >
-                <input
-                  ref={thumbnailInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) =>
-                    handleFileChange(
-                      "thumbnailFile",
-                      e.target.files?.[0] || null
-                    )
-                  }
-                />
-                <div className="text-sm text-muted-foreground">
-                  <Upload className="mx-auto size-6 mb-2" />
-                  Drag & drop image here or click to browse
-                  <div className="text-xs mt-1">JPG, PNG, WebP</div>
-                </div>
-              </div>
-
-              {/* File info and remove button */}
-              {formData.thumbnailFile && (
-                <div className="flex items-center space-x-2 mt-2 max-w-xs text-foreground truncate p-2 bg-muted rounded-md">
-                  <ImageIcon className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate flex-1">
-                    {formData.thumbnailFile.name}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    type="button"
-                    onClick={() => handleFileChange("thumbnailFile", null)}
-                    className="size-6 hover:bg-destructive hover:text-destructive-foreground"
-                  >
-                    <IconX className="size-4" />
-                  </Button>
-                </div>
-              )}
-
-              {/* Show existing thumbnail info when editing */}
-              {editingMusic &&
-                !formData.thumbnailFile &&
-                editingMusic.thumbnailUrl && (
-                  <div className="flex items-center space-x-2 mt-2 max-w-xs text-muted-foreground truncate p-2 bg-muted rounded-md">
-                    <ImageIcon className="w-4 h-4 flex-shrink-0" />
-                    <span className="truncate flex-1">
-                      Using existing thumbnail
-                    </span>
+                    <input
+                      ref={audioInputRef}
+                      type="file"
+                      accept="audio/*"
+                      className="hidden"
+                      onChange={(e) =>
+                        handleFileChange(
+                          "audioFile",
+                          e.target.files?.[0] || null
+                        )
+                      }
+                    />
+                    <Upload className="mx-auto size-12 mb-3 text-muted-foreground" />
+                    <p className="font-medium mb-1">Drop audio file here</p>
+                    <p className="text-sm text-muted-foreground">
+                      or click to browse
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Supports MP3, WAV, FLAC, OGG
+                    </p>
                   </div>
-                )}
-            </div>
 
-            {/* Basic Info */}
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Track Title *</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => handleInputChange("title", e.target.value)}
-                  placeholder="Enter track title"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="artist">Artist *</Label>
-                <Input
-                  id="artist"
-                  value={formData.artist}
-                  onChange={(e) => handleInputChange("artist", e.target.value)}
-                  placeholder="Enter artist name"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Genre */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Tag className="size-4" />
-                Genres
-              </Label>
-              <Select
-                value=""
-                onValueChange={(value) => {
-                  if (value && !formData.genre.includes(value)) {
-                    setFormData((prev) => ({
-                      ...prev,
-                      genre: [...prev.genre, value],
-                    }));
-                  }
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select genre(s)" />
-                </SelectTrigger>
-                <SelectContent
-                  className="grid grid-cols-2 sm:grid-cols-3 gap-1 max-h-72 overflow-auto min-w-[16rem]"
-                  style={{ minWidth: "16rem" }}
-                >
-                  {[
-                    "POP",
-                    "HIPHOP",
-                    "JAZZ",
-                    "ROCK",
-                    "CLASSICAL",
-                    "GOSPEL",
-                    "OTHER",
-                  ].map((genre) => (
-                    <SelectItem
-                      key={genre}
-                      value={genre}
-                      className="col-span-1 whitespace-nowrap"
-                    >
-                      {genre === "HIPHOP"
-                        ? "Hip Hop"
-                        : genre === "GOSPEL"
-                        ? "Gospel"
-                        : genre.charAt(0) + genre.slice(1).toLowerCase()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {formData.genre.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {formData.genre.map((genre) => (
-                    <Badge
-                      key={genre}
-                      variant="secondary"
-                      className="flex items-center gap-1"
-                    >
-                      {genre}
+                  {formData.audioFile && (
+                    <div className="flex items-center gap-3 mt-4 p-3 bg-muted rounded-lg">
+                      <FileAudio className="size-5 text-primary flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">
+                          {formData.audioFile.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {(formData.audioFile.size / (1024 * 1024)).toFixed(2)}{" "}
+                          MB
+                        </p>
+                      </div>
                       <Button
-                        type="button"
                         variant="ghost"
                         size="icon"
-                        className="size-4 hover:bg-destructive hover:text-destructive-foreground"
-                        onClick={() => removeGenre(genre)}
+                        type="button"
+                        onClick={() => handleFileChange("audioFile", null)}
+                        className="hover:bg-destructive hover:text-destructive-foreground"
                       >
-                        <IconX className="size-3" />
+                        <IconX className="size-4" />
                       </Button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
+                    </div>
+                  )}
 
-            {/* Visibility & Release Date */}
-            <div className="flex gap-3">
-              {/* Visibility */}
-              <div className="flex-1 space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Eye className="size-4" />
-                  Visibility
-                </Label>
-                <Select
-                  value={formData.visibility}
-                  onValueChange={(value: "PUBLIC" | "PRIVATE" | "UNLISTED") =>
-                    handleInputChange("visibility", value)
-                  }
+                  {editingMusic && !formData.audioFile && (
+                    <div className="flex items-center gap-3 mt-4 p-3 bg-muted/50 rounded-lg">
+                      <FileAudio className="size-5 text-muted-foreground flex-shrink-0" />
+                      <p className="text-sm text-muted-foreground">
+                        Using existing audio file
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Thumbnail Upload */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ImageIcon className="size-4" />
+                    Cover Image
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer
+                      ${
+                        dragOver.thumbnail
+                          ? "border-primary bg-primary/10 scale-105"
+                          : "border-muted-foreground/25 hover:border-primary/50"
+                      }`}
+                    onDrop={(e) => handleDrop(e, "thumbnail")}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOver((prev) => ({ ...prev, thumbnail: true }));
+                    }}
+                    onDragLeave={() =>
+                      setDragOver((prev) => ({ ...prev, thumbnail: false }))
+                    }
+                    onClick={() => thumbnailInputRef.current?.click()}
+                  >
+                    <input
+                      ref={thumbnailInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) =>
+                        handleFileChange(
+                          "thumbnailFile",
+                          e.target.files?.[0] || null
+                        )
+                      }
+                    />
+                    {thumbnailPreview ? (
+                      <div className="relative w-32 h-32 mx-auto rounded-lg overflow-hidden">
+                        <img
+                          src={thumbnailPreview}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="mx-auto size-12 mb-3 text-muted-foreground" />
+                        <p className="font-medium mb-1">
+                          Drop cover image here
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          or click to browse
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          JPG, PNG, WebP (max 10MB)
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  {formData.thumbnailFile && (
+                    <div className="flex items-center gap-3 mt-4 p-3 bg-muted rounded-lg">
+                      <ImageIcon className="size-5 text-primary flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">
+                          {formData.thumbnailFile.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {(formData.thumbnailFile.size / 1024).toFixed(2)} KB
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        type="button"
+                        onClick={() => handleFileChange("thumbnailFile", null)}
+                        className="hover:bg-destructive hover:text-destructive-foreground"
+                      >
+                        <IconX className="size-4" />
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className="flex justify-end mt-6">
+                <Button
+                  type="button"
+                  onClick={() => setCurrentStep("details")}
+                  disabled={!canProceedToDetails}
+                  className="w-full mt-6"
                 >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PUBLIC">
-                      <div className="flex items-center gap-2">
-                        <Globe className="size-4" />
-                        Public
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="PRIVATE">
-                      <div className="flex items-center gap-2">
-                        <Lock className="size-4" />
-                        Private
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="UNLISTED">
-                      <div className="flex items-center gap-2">
-                        <Eye className="size-4" />
-                        Unlisted
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                  Next: Details
+                  <IconChevronRight className="ml-2 size-4" />
+                </Button>
               </div>
+            </TabsContent>
 
-              {/* Release Date */}
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="released" className="flex items-center gap-2">
-                  <Calendar className="size-4" />
-                  Release Date
-                </Label>
-                <Input
-                  id="released"
-                  type="date"
-                  value={formData.released}
-                  onChange={(e) =>
-                    handleInputChange("released", e.target.value)
+            {/* DETAILS TAB */}
+            <TabsContent value="details" className="space-y-6">
+              {/* Basic Info */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Track Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="title">Track Title *</Label>
+                    <Input
+                      id="title"
+                      value={formData.title}
+                      onChange={(e) =>
+                        handleInputChange("title", e.target.value)
+                      }
+                      placeholder="Enter track title"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="artist">Artist *</Label>
+                    <Input
+                      id="artist"
+                      value={formData.artist}
+                      onChange={(e) =>
+                        handleInputChange("artist", e.target.value)
+                      }
+                      placeholder="Enter artist name"
+                      required
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Genre */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Tag className="size-4" />
+                    Genres
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Select
+                    value=""
+                    onValueChange={(value) => {
+                      if (value && !formData.genre.includes(value)) {
+                        setFormData((prev) => ({
+                          ...prev,
+                          genre: [...prev.genre, value],
+                        }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select genre(s)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        "POP",
+                        "HIPHOP",
+                        "JAZZ",
+                        "ROCK",
+                        "CLASSICAL",
+                        "GOSPEL",
+                        "OTHER",
+                      ].map((genre) => (
+                        <SelectItem key={genre} value={genre}>
+                          {genre === "HIPHOP"
+                            ? "Hip Hop"
+                            : genre.charAt(0) + genre.slice(1).toLowerCase()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {formData.genre.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.genre.map((genre) => (
+                        <Badge
+                          key={genre}
+                          variant="secondary"
+                          className="flex items-center gap-1"
+                        >
+                          {genre}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-4 hover:bg-destructive hover:text-destructive-foreground ml-1"
+                            onClick={() => removeGenre(genre)}
+                          >
+                            <IconX className="size-3" />
+                          </Button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Visibility & Release Date */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    Publishing Settings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Eye className="size-4" />
+                      Visibility
+                    </Label>
+                    <Select
+                      value={formData.visibility}
+                      onValueChange={(
+                        value: "PUBLIC" | "PRIVATE" | "UNLISTED"
+                      ) => handleInputChange("visibility", value)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PUBLIC">
+                          <div className="flex items-center gap-2">
+                            <Globe className="size-4" />
+                            Public
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="PRIVATE">
+                          <div className="flex items-center gap-2">
+                            <Lock className="size-4" />
+                            Private
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="UNLISTED">
+                          <div className="flex items-center gap-2">
+                            <Eye className="size-4" />
+                            Unlisted
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="released"
+                      className="flex items-center gap-2"
+                    >
+                      <Calendar className="size-4" />
+                      Release Date
+                    </Label>
+                    <Input
+                      id="released"
+                      type="date"
+                      value={formData.released}
+                      onChange={(e) =>
+                        handleInputChange("released", e.target.value)
+                      }
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* License */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    License Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Textarea
+                    id="licensed"
+                    value={formData.licensed}
+                    onChange={(e) =>
+                      handleInputChange("licensed", e.target.value)
+                    }
+                    placeholder="e.g., All Rights Reserved, Creative Commons BY-SA, etc."
+                    rows={3}
+                  />
+                </CardContent>
+              </Card>
+
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCurrentStep("files")}
+                  className="flex-1"
+                >
+                  <IconChevronLeft className="mr-2 size-4" />
+                  Back
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setCurrentStep("review")}
+                  disabled={!canProceedToReview}
+                  className="flex-1"
+                >
+                  Next: Review
+                  <IconChevronRight className="ml-2 size-4" />
+                </Button>
+              </div>
+            </TabsContent>
+
+            {/* REVIEW TAB */}
+            <TabsContent value="review" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Review Your Track</CardTitle>
+                  <CardDescription>
+                    Check all details before uploading
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-start gap-4">
+                    {thumbnailPreview && (
+                      <div className="w-32 h-32 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
+                        <img
+                          src={thumbnailPreview}
+                          alt="Cover preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="flex-1 space-y-2">
+                      <h3 className="font-bold text-xl">{formData.title}</h3>
+                      <p className="text-muted-foreground">{formData.artist}</p>
+                      {formData.genre.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {formData.genre.map((genre) => (
+                            <Badge key={genre} variant="secondary">
+                              {genre}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">
+                        Visibility
+                      </p>
+                      <Badge variant="outline">
+                        {formData.visibility === "PUBLIC" && (
+                          <Globe className="size-3 mr-1" />
+                        )}
+                        {formData.visibility === "PRIVATE" && (
+                          <Lock className="size-3 mr-1" />
+                        )}
+                        {formData.visibility}
+                      </Badge>
+                    </div>
+                    {formData.released && (
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">
+                          Release Date
+                        </p>
+                        <p className="font-medium">
+                          {new Date(formData.released).toLocaleDateString()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {formData.licensed && (
+                    <div className="pt-4 border-t">
+                      <p className="text-sm text-muted-foreground mb-1">
+                        License
+                      </p>
+                      <p className="text-sm">{formData.licensed}</p>
+                    </div>
+                  )}
+
+                  {isUploading && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Uploading...</span>
+                        <span>{uploadProgress}%</span>
+                      </div>
+                      <Progress value={uploadProgress} className="h-2" />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCurrentStep("details")}
+                  disabled={isUploading}
+                  className="flex-1"
+                >
+                  <IconChevronLeft className="mr-2 size-4" />
+                  Back
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    !formData.title ||
+                    !formData.artist ||
+                    (!editingMusic && !formData.audioFile) ||
+                    isUploading
                   }
-                />
+                  className="flex-1"
+                >
+                  {isUploading ? (
+                    <>
+                      <IconLoader className="mr-2 size-4 animate-spin" />
+                      {uploadProgress < 100
+                        ? `Uploading ${uploadProgress}%`
+                        : "Processing..."}
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 size-4" />
+                      {editingMusic ? "Update Track" : "Upload Track"}
+                    </>
+                  )}
+                </Button>
               </div>
-            </div>
-
-            {/* License */}
-            <div className="space-y-2">
-              <Label htmlFor="licensed">License</Label>
-              <Textarea
-                id="licensed"
-                value={formData.licensed}
-                onChange={(e) => handleInputChange("licensed", e.target.value)}
-                placeholder="License information (e.g., All Rights Reserved, Creative Commons, etc.)"
-                rows={3}
-              />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 pt-4 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={() => setIsOpen(false)}
-                disabled={isUploading}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className="flex-1"
-                disabled={
-                  !formData.title ||
-                  !formData.artist ||
-                  (!editingMusic && !formData.audioFile) ||
-                  isUploading
-                }
-              >
-                {isUploading ? (
-                  <>
-                    <IconLoader className="mr-2 size-4 animate-spin" />
-                    {editingMusic ? "Updating..." : "Uploading..."}
-                  </>
-                ) : (
-                  <>
-                    <Upload className="mr-2 size-4" />
-                    {editingMusic ? "Update Track" : "Upload Track"}
-                  </>
-                )}
-              </Button>
-            </div>
+            </TabsContent>
           </form>
-        </div>
+        </Tabs>
       </SheetContent>
     </Sheet>
   );
 }
 
+// Enhanced Music Player Widget - Improved Layout
 function MusicPlayerWidget({
   music,
   isPlaying,
@@ -1008,10 +1506,15 @@ function MusicPlayerWidget({
   hasPrevious: boolean;
   audioElement: HTMLAudioElement | null;
 }) {
+  // Guard clause for null music
+  if (!music) return null;
+
   const [currentTime, setCurrentTime] = React.useState(0);
   const [duration, setDuration] = React.useState(music.duration || 0);
+  const [volume, setVolume] = React.useState(1);
+  const [isMuted, setIsMuted] = React.useState(false);
+  const [showVolume, setShowVolume] = React.useState(false);
 
-  // Set up audio event listeners once
   React.useEffect(() => {
     if (!audioElement) return;
 
@@ -1028,26 +1531,19 @@ function MusicPlayerWidget({
     };
   }, [audioElement, music.duration]);
 
-  // Handle track changes - only update source when track changes
   React.useEffect(() => {
     if (!audioElement) return;
-
-    // Only change source if it's a different track
     if (audioElement.src !== music.audioUrl) {
       audioElement.src = music.audioUrl;
       audioElement.load();
-
-      // Auto-play when track changes
       if (isPlaying) {
         audioElement.play().catch(console.error);
       }
     }
   }, [music.audioUrl, audioElement, isPlaying]);
 
-  // Handle play/pause
   React.useEffect(() => {
     if (!audioElement) return;
-
     if (isPlaying) {
       audioElement.play().catch(console.error);
     } else {
@@ -1055,106 +1551,282 @@ function MusicPlayerWidget({
     }
   }, [isPlaying, audioElement]);
 
-  // Handle seeking
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!audioElement) return;
-
     const progressBar = e.currentTarget;
     const rect = progressBar.getBoundingClientRect();
     const seekPosition = (e.clientX - rect.left) / rect.width;
     const seekTime = seekPosition * duration;
-
     audioElement.currentTime = seekTime;
     setCurrentTime(seekTime);
   };
 
-  // Calculate progress percentage
+  const toggleMute = () => {
+    if (!audioElement) return;
+    if (isMuted) {
+      audioElement.volume = volume;
+      setIsMuted(false);
+    } else {
+      audioElement.volume = 0;
+      setIsMuted(true);
+    }
+  };
+
+  const handleVolumeChange = ([newVolume]: number[]) => {
+    setVolume(newVolume);
+    if (audioElement) {
+      audioElement.volume = newVolume;
+      setIsMuted(newVolume === 0);
+    }
+  };
+
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <>
-      {/* Hidden audio element */}
-      {/* <audio ref={audioElement} preload="metadata" /> */}
-
-      {/* Player widget */}
-      <div className="fixed bottom-4 right-4 z-50 w-100 bg-background border rounded-lg shadow-lg p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold">Now Playing</h4>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+    <Card className="fixed bottom-6 right-6 left-6 md:left-auto md:w-[480px] z-50 shadow-2xl border-2 backdrop-blur-sm bg-background/95">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="size-2 rounded-full bg-green-500 animate-pulse" />
+            <CardTitle className="text-sm font-semibold">Now Playing</CardTitle>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 hover:bg-destructive/10 hover:text-destructive"
+            onClick={onClose}
+          >
             <IconX className="size-4" />
           </Button>
         </div>
+      </CardHeader>
 
-        <div className="flex items-center gap-3">
-          <div className="flex-shrink-0 w-12 h-12 bg-muted rounded-md overflow-hidden">
-            {music.thumbnailUrl ? (
-              <img
-                src={music.thumbnailUrl}
-                alt={music.title}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <Disc3 className="w-full h-full text-muted-foreground p-2" />
-            )}
-          </div>
+      <CardContent className="space-y-5">
+        {/* Album Art & Info */}
+        <div className="flex items-center gap-4">
+          <Avatar className="size-20 rounded-lg shadow-md">
+            <AvatarImage
+              src={music.thumbnailUrl}
+              alt={music.title}
+              className="object-cover"
+            />
+            <AvatarFallback className="rounded-lg bg-gradient-to-br from-primary/20 to-primary/5">
+              <Music className="size-10 text-primary" />
+            </AvatarFallback>
+          </Avatar>
 
           <div className="flex-1 min-w-0">
-            <p className="font-medium truncate">{music.title}</p>
+            <h4 className="font-bold text-lg truncate leading-tight mb-1">
+              {music.title}
+            </h4>
             <p className="text-sm text-muted-foreground truncate">
               {music.artist}
             </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Previous"
-              onClick={onPrevious}
-              disabled={!hasPrevious}
-              className={!hasPrevious ? "opacity-50" : ""}
-            >
-              <IconPlayerTrackPrev className="size-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={onPlayPause}>
-              {isPlaying ? (
-                <Pause className="size-4" />
-              ) : (
-                <Play className="size-4" />
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Next"
-              onClick={onNext}
-              disabled={!hasNext}
-              className={!hasNext ? "opacity-50" : ""}
-            >
-              <IconPlayerTrackNext className="size-4" />
-            </Button>
+            {music.genre && music.genre.length > 0 && (
+              <div className="flex gap-1 mt-2">
+                {music.genre.slice(0, 2).map((genre, idx) => (
+                  <Badge
+                    key={idx}
+                    variant="secondary"
+                    className="text-xs px-2 py-0"
+                  >
+                    {genre}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="mt-3 flex items-center gap-2">
-          <span className="text-xs text-muted-foreground w-10">
-            {formatDuration(currentTime)}
-          </span>
+        {/* Progress Bar */}
+        <div className="space-y-2">
           <div
-            className="flex-1 h-1 bg-muted rounded-full overflow-hidden cursor-pointer"
+            className="h-2 bg-muted rounded-full overflow-hidden cursor-pointer group relative"
             onClick={handleSeek}
           >
             <div
-              className="h-full bg-primary transition-all duration-150"
+              className="h-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-150 relative"
               style={{ width: `${progressPercentage}%` }}
-            />
+            >
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 size-3 bg-primary rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg" />
+            </div>
           </div>
-          <span className="text-xs text-muted-foreground w-10">
-            {formatDuration(duration)}
-          </span>
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
+            <span>{formatDuration(currentTime)}</span>
+            <span>{formatDuration(duration)}</span>
+          </div>
         </div>
-      </div>
-    </>
+
+        {/* Controls - Centered Layout */}
+        <div className="flex items-center justify-between pt-2">
+          {/* Left Side - Quick Actions */}
+          <div className="flex items-center gap-3">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-9 hover:bg-primary/10"
+                  >
+                    <Plus className="size-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Add to playlist</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-9 hover:bg-primary/10"
+                  >
+                    <Download className="size-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Download</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          {/* Center - Playback Controls */}
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onPrevious}
+                    disabled={!hasPrevious}
+                    className="size-10 hover:bg-primary/10 disabled:opacity-30"
+                  >
+                    <IconPlayerTrackPrev className="size-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Previous track</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <Button
+              size="icon"
+              onClick={onPlayPause}
+              className="size-14 rounded-full shadow-lg hover:scale-105 transition-transform"
+            >
+              {isPlaying ? (
+                <Pause className="size-6" fill="white" />
+              ) : (
+                <Play className="size-6 ml-0.5" fill="white" />
+              )}
+            </Button>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onNext}
+                    disabled={!hasNext}
+                    className="size-10 hover:bg-primary/10 disabled:opacity-30"
+                  >
+                    <IconPlayerTrackNext className="size-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Next track</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          {/* Right Side - Volume & More */}
+          <div className="flex relative items-center gap-3">
+            {/* Volume Control */}
+            <TooltipProvider>
+              <Tooltip open={showVolume ? false : undefined}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleMute}
+                    onMouseEnter={() => setShowVolume(true)}
+                    onMouseLeave={() => setShowVolume(false)}
+                    className="size-9 hover:bg-primary/10 relative"
+                  >
+                    {isMuted || volume === 0 ? (
+                      <VolumeX className="size-5" />
+                    ) : volume < 0.5 ? (
+                      <Volume1 className="size-5" />
+                    ) : (
+                      <Volume2 className="size-5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{isMuted ? "Unmute" : "Mute"}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Volume Slider Popover */}
+            {showVolume && (
+              <div
+                className="absolute bottom-full right-8 mb-2 p-3 bg-popover border rounded-lg shadow-lg"
+                onMouseEnter={() => setShowVolume(true)}
+                onMouseLeave={() => setShowVolume(false)}
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {Math.round(volume * 100)}%
+                  </span>
+                  <Slider
+                    value={[volume]}
+                    onValueChange={handleVolumeChange}
+                    max={1}
+                    step={0.01}
+                    orientation="vertical"
+                    className="h-24"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* More Options */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-9 hover:bg-primary/10"
+                >
+                  <MoreVertical className="size-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem>
+                  <Share2 className="size-4 mr-2" />
+                  Share
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Info className="size-4 mr-2" />
+                  Track Info
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <IconLayoutGrid className="size-4 mr-2" />
+                  Go to Album
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <User className="size-4 mr-2" />
+                  Go to Artist
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1163,10 +1835,10 @@ export function MusicTable({
 }: {
   music: z.infer<typeof musicSchema>[];
 }) {
-  const { music: musicData, reload: musicReload } = useReduxMusic();
+  const { music: musicData, reload: musicReload, loading } = useReduxMusic();
   const audioRef = React.useRef<HTMLAudioElement>(null);
   const [data, setData] = React.useState<z.infer<typeof musicSchema>[]>(music);
-  const [viewMode, setViewMode] = React.useState<"table" | "card">("table");
+  const [viewMode, setViewMode] = React.useState<"table" | "card">("card");
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
@@ -1176,7 +1848,7 @@ export function MusicTable({
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
-    pageSize: 10,
+    pageSize: 12,
   });
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [genreFilter, setGenreFilter] = React.useState("all");
@@ -1189,8 +1861,6 @@ export function MusicTable({
   > | null>(null);
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [showPlayer, setShowPlayer] = React.useState(false);
-  const { loading } = useReduxMusic();
-
   const [editingMusic, setEditingMusic] = React.useState<z.infer<
     typeof musicSchema
   > | null>(null);
@@ -1208,8 +1878,7 @@ export function MusicTable({
 
   React.useEffect(() => {
     if (!audioRef.current) {
-      const audio = new Audio();
-      audioRef.current = audio;
+      audioRef.current = new Audio();
     }
   }, []);
 
@@ -1231,7 +1900,6 @@ export function MusicTable({
 
   const dataIds = React.useMemo(() => music.map((track) => track.id), [music]);
 
-  // Get unique genres for filter
   const uniqueGenres = React.useMemo(() => {
     const genres = new Set<string>();
     data.forEach((track) => {
@@ -1240,11 +1908,9 @@ export function MusicTable({
     return Array.from(genres).sort();
   }, [data]);
 
-  // Filter data based on filters
   const filteredData = React.useMemo(() => {
     let filtered = data;
 
-    // Global search filter
     if (globalFilter) {
       filtered = filtered.filter(
         (track) =>
@@ -1256,12 +1922,10 @@ export function MusicTable({
       );
     }
 
-    // Genre filter
     if (genreFilter !== "all") {
       filtered = filtered.filter((track) => track.genre?.includes(genreFilter));
     }
 
-    // Visibility filter
     if (visibilityFilter !== "all") {
       filtered = filtered.filter(
         (track) => track.visibility === visibilityFilter.toUpperCase()
@@ -1280,11 +1944,9 @@ export function MusicTable({
       const track = data.find((t) => t.id === musicId);
       if (track) {
         if (currentlyPlaying === musicId) {
-          // Pause if already playing
           setIsPlaying(false);
           setCurrentlyPlaying(null);
         } else {
-          // Play new track or resume
           setCurrentTrack(track);
           setCurrentlyPlaying(musicId);
           setIsPlaying(true);
@@ -1313,7 +1975,6 @@ export function MusicTable({
 
   const handleNext = React.useCallback(() => {
     if (!currentTrack || !hasNext) return;
-
     const currentIndex = filteredData.findIndex(
       (track) => track.id === currentTrack.id
     );
@@ -1327,7 +1988,6 @@ export function MusicTable({
 
   const handlePrevious = React.useCallback(() => {
     if (!currentTrack || !hasPrevious) return;
-
     const currentIndex = filteredData.findIndex(
       (track) => track.id === currentTrack.id
     );
@@ -1341,7 +2001,15 @@ export function MusicTable({
 
   const handleUploadSuccess = React.useCallback(
     (newTrack: z.infer<typeof musicSchema>) => {
-      setData((prev) => [newTrack, ...prev]);
+      setData((prev) => {
+        const existingIndex = prev.findIndex((t) => t.id === newTrack.id);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = newTrack;
+          return updated;
+        }
+        return [newTrack, ...prev];
+      });
     },
     []
   );
@@ -1487,16 +2155,21 @@ export function MusicTable({
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-32">
+            <DropdownMenuContent align="end" className="w-40">
               <DropdownMenuItem
                 onClick={() => handlePlayPause(row.original.id)}
               >
+                <Play className="size-4 mr-2" />
                 {currentlyPlaying === row.original.id ? "Pause" : "Play"}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setEditingMusic(row.original)}>
+                <IconDotsVertical className="size-4 mr-2" />
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem>Add to Playlist</DropdownMenuItem>
+              <DropdownMenuItem>
+                <Plus className="size-4 mr-2" />
+                Add to Playlist
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DeleteMusicDialog
                 music={row.original}
@@ -1542,19 +2215,10 @@ export function MusicTable({
       setData((data) => {
         const oldIndex = dataIds.indexOf(Number(active.id));
         const newIndex = dataIds.indexOf(Number(over.id));
-        const newData = arrayMove(data, oldIndex, newIndex);
-        // Optional: Save new order to backend
-        // api.put('/music/order', { order: newData.map(track => track.id) });
-        return newData;
+        return arrayMove(data, oldIndex, newIndex);
       });
     }
   }
-
-  const handleViewModeSelect = (value: string) => {
-    if (value === "table" || value === "card") {
-      setViewMode(value);
-    }
-  };
 
   const clearFilters = () => {
     setGlobalFilter("");
@@ -1564,48 +2228,42 @@ export function MusicTable({
 
   return (
     <Tabs
-      defaultValue="table"
+      defaultValue="card"
       className="w-full flex-col justify-start gap-6"
       value={viewMode}
       onValueChange={(value) => setViewMode(value as "table" | "card")}
     >
-      {/* Header with View Toggle and Actions */}
+      {/* Header */}
       <div className="flex items-center justify-between px-4 lg:px-6">
-        <Label htmlFor="view-selector" className="sr-only">
-          View
-        </Label>
-        <Select value={viewMode} onValueChange={handleViewModeSelect}>
-          <SelectTrigger
-            className="flex w-fit @4xl/main:hidden"
-            size="sm"
-            id="view-selector"
-          >
-            <SelectValue placeholder="Select a view" />
+        <Select value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
+          <SelectTrigger className="flex w-fit @4xl/main:hidden" size="sm">
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="table">Table View</SelectItem>
             <SelectItem value="card">Card View</SelectItem>
+            <SelectItem value="table">Table View</SelectItem>
           </SelectContent>
         </Select>
+
         <TabsList className="hidden @4xl/main:flex">
-          <TabsTrigger value="table" className="flex items-center gap-2">
-            <IconTable className="size-4" />
-            Table View
-          </TabsTrigger>
           <TabsTrigger value="card" className="flex items-center gap-2">
             <IconLayoutGrid className="size-4" />
             Card View
           </TabsTrigger>
+          <TabsTrigger value="table" className="flex items-center gap-2">
+            <IconTable className="size-4" />
+            Table View
+          </TabsTrigger>
         </TabsList>
+
         <div className="flex items-center gap-2">
           {viewMode === "table" && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <IconLayoutColumns />
-                  <span className="hidden lg:inline">Customize Columns</span>
-                  <span className="lg:hidden">Columns</span>
-                  <IconChevronDown />
+                <Button variant="outline" size="sm" className="gap-2">
+                  <IconLayoutColumns className="size-4" />
+                  <span className="hidden lg:inline">Columns</span>
+                  <IconChevronDown className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -1640,10 +2298,9 @@ export function MusicTable({
         </div>
       </div>
 
-      {/* Filters Section */}
+      {/* Filters */}
       <div className="flex flex-col gap-4 px-4 lg:px-6">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          {/* Search Input */}
           <div className="relative flex-1 max-w-md">
             <IconSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
@@ -1664,11 +2321,9 @@ export function MusicTable({
             )}
           </div>
 
-          {/* Filter Controls */}
           <div className="flex items-center gap-2">
-            {/* Genre Filter */}
             <Select value={genreFilter} onValueChange={setGenreFilter}>
-              <SelectTrigger className="w-46">
+              <SelectTrigger className="w-40">
                 <Music className="size-4 mr-1" />
                 <SelectValue placeholder="Genre" />
               </SelectTrigger>
@@ -1682,7 +2337,6 @@ export function MusicTable({
               </SelectContent>
             </Select>
 
-            {/* Visibility Filter */}
             <Select
               value={visibilityFilter}
               onValueChange={setVisibilityFilter}
@@ -1699,7 +2353,6 @@ export function MusicTable({
               </SelectContent>
             </Select>
 
-            {/* Clear Filters */}
             {(globalFilter ||
               genreFilter !== "all" ||
               visibilityFilter !== "all") && (
@@ -1711,7 +2364,6 @@ export function MusicTable({
           </div>
         </div>
 
-        {/* Active Filters Display */}
         {(globalFilter ||
           genreFilter !== "all" ||
           visibilityFilter !== "all") && (
@@ -1759,199 +2411,225 @@ export function MusicTable({
         )}
       </div>
 
-      <>
-        <TabsContent
-          value="table"
-          className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
-        >
-          <div className="overflow-hidden rounded-lg border">
-            <DndContext
-              collisionDetection={closestCenter}
-              modifiers={[restrictToVerticalAxis]}
-              onDragEnd={handleDragEnd}
-              sensors={sensors}
-              id={sortableId}
-            >
-              <Table>
-                <TableHeader className="bg-muted/50 sticky top-0 z-10">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead key={header.id} colSpan={header.colSpan}>
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {table.getRowModel().rows?.length ? (
-                    <SortableContext
-                      items={dataIds}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {table.getRowModel().rows.map((row) => (
-                        <DraggableRow key={row.id} row={row} />
-                      ))}
-                    </SortableContext>
-                  ) : loading ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={columns.length}
-                        className="h-24 text-center text-muted-foreground"
-                      >
-                        <div className="flex flex-col items-center gap-2">
-                          <IconLoader className="animate-spin size-8 text-muted-foreground" />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        colSpan={columns.length}
-                        className="h-24 text-center text-muted-foreground"
-                      >
-                        <div className="flex flex-col items-center gap-2">
-                          <span>No tracks found.</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </DndContext>
-          </div>
-
-          {/* Table Pagination */}
-          <div className="flex items-center justify-between px-4">
-            <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
-              {table.getFilteredSelectedRowModel().rows.length} of{" "}
-              {table.getFilteredRowModel().rows.length} track(s) selected.
-            </div>
-            <div className="flex w-full items-center gap-8 lg:w-fit">
-              <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Tracks per page
-                </Label>
-                <Select
-                  value={`${table.getState().pagination.pageSize}`}
-                  onValueChange={(value) => table.setPageSize(Number(value))}
-                >
-                  <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                    <SelectValue
-                      placeholder={table.getState().pagination.pageSize}
-                    />
-                  </SelectTrigger>
-                  <SelectContent side="top">
-                    {[10, 20, 30, 40, 50].map((pageSize) => (
-                      <SelectItem key={pageSize} value={`${pageSize}`}>
-                        {pageSize}
-                      </SelectItem>
+      {/* Table View */}
+      <TabsContent
+        value="table"
+        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
+      >
+        <div className="overflow-hidden rounded-lg border">
+          <DndContext
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            onDragEnd={handleDragEnd}
+            sensors={sensors}
+            id={sortableId}
+          >
+            <Table>
+              <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id} colSpan={header.colSpan}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                      </TableHead>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex w-fit items-center justify-center text-sm font-medium">
-                Page {table.getState().pagination.pageIndex + 1} of{" "}
-                {table.getPageCount()}
-              </div>
-              <div className="ml-auto flex items-center gap-2 lg:ml-0">
-                <Button
-                  variant="outline"
-                  className="hidden h-8 w-8 p-0 lg:flex"
-                  onClick={() => table.setPageIndex(0)}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <span className="sr-only">Go to first page</span>
-                  <IconChevronsLeft />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="size-8"
-                  size="icon"
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <span className="sr-only">Go to previous page</span>
-                  <IconChevronLeft />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="size-8"
-                  size="icon"
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                >
-                  <span className="sr-only">Go to next page</span>
-                  <IconChevronRight />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="hidden size-8 lg:flex"
-                  size="icon"
-                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                  disabled={!table.getCanNextPage()}
-                >
-                  <span className="sr-only">Go to last page</span>
-                  <IconChevronsRight />
-                </Button>
-              </div>
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows?.length ? (
+                  <SortableContext
+                    items={dataIds}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {table.getRowModel().rows.map((row) => (
+                      <DraggableRow key={row.id} row={row} />
+                    ))}
+                  </SortableContext>
+                ) : loading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={columns.length}
+                      className="h-32 text-center"
+                    >
+                      <div className="flex flex-col items-center gap-3">
+                        <IconLoader className="animate-spin size-8 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                          Loading tracks...
+                        </p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={columns.length}
+                      className="h-36 text-center"
+                    >
+                      <div className="flex flex-col items-center gap-3">
+                        <Music className="size-12 text-muted-foreground opacity-50" />
+                        <div>
+                          <p className="font-semibold mb-1">No tracks found</p>
+                          <p className="text-sm text-muted-foreground">
+                            {globalFilter ||
+                            genreFilter !== "all" ||
+                            visibilityFilter !== "all"
+                              ? "Try adjusting your filters"
+                              : "Upload your first track to get started"}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </DndContext>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex items-center justify-between px-4">
+          <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
+            {table.getFilteredSelectedRowModel().rows.length} of{" "}
+            {table.getFilteredRowModel().rows.length} track(s) selected
+          </div>
+          <div className="flex w-full items-center gap-8 lg:w-fit">
+            <div className="hidden items-center gap-2 lg:flex">
+              <Label htmlFor="rows-per-page" className="text-sm font-medium">
+                Tracks per page
+              </Label>
+              <Select
+                value={`${table.getState().pagination.pageSize}`}
+                onValueChange={(value) => table.setPageSize(Number(value))}
+              >
+                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent side="top">
+                  {[10, 20, 30, 40, 50].map((pageSize) => (
+                    <SelectItem key={pageSize} value={`${pageSize}`}>
+                      {pageSize}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex w-fit items-center justify-center text-sm font-medium">
+              Page {table.getState().pagination.pageIndex + 1} of{" "}
+              {table.getPageCount()}
+            </div>
+            <div className="ml-auto flex items-center gap-2 lg:ml-0">
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 lg:flex"
+                onClick={() => table.setPageIndex(0)}
+                disabled={!table.getCanPreviousPage()}
+              >
+                <IconChevronsLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+              >
+                <IconChevronLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+              >
+                <IconChevronRight />
+              </Button>
+              <Button
+                variant="outline"
+                className="hidden size-8 lg:flex"
+                size="icon"
+                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                disabled={!table.getCanNextPage()}
+              >
+                <IconChevronsRight />
+              </Button>
             </div>
           </div>
-        </TabsContent>
+        </div>
+      </TabsContent>
 
-        <TabsContent value="card" className="flex flex-col px-4 lg:px-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6 gap-6">
+      {/* Card View */}
+      <TabsContent value="card" className="px-4 lg:px-6">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-64 gap-3">
+            <IconLoader className="animate-spin size-12 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Loading tracks...</p>
+          </div>
+        ) : filteredData.length > 0 ? (
+          <div className="grid gap-1 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
             {filteredData.map((track) => (
-              <MusicCard
-                key={track.id}
-                music={track}
-                isPlaying={currentlyPlaying === track.id}
-                onPlayPause={handlePlayPause}
-                onEdit={setEditingMusic}
-              />
+              
+                <MusicCard
+                  key={track.id}
+                  music={track}
+                  isPlaying={currentlyPlaying === track.id}
+                  onPlayPause={handlePlayPause}
+                  onEdit={setEditingMusic}
+                />
+              
             ))}
           </div>
-          {filteredData.length === 0 && (
-            <div className="flex items-center justify-center h-64 text-muted-foreground">
-              <div className="text-center space-y-4">
-                <Music className="size-16 mx-auto text-muted-foreground/50" />
-                <div className="space-y-2">
-                  <h3 className="text-lg font-semibold">No tracks found</h3>
-                  <p className="text-sm">
-                    {globalFilter ||
-                    genreFilter !== "all" ||
-                    visibilityFilter !== "all"
-                      ? "Try adjusting your filters or search terms"
-                      : "Start by uploading your first track"}
-                  </p>
-                </div>
-                <div className="flex items-center justify-center gap-2">
-                  {(globalFilter ||
-                    genreFilter !== "all" ||
-                    visibilityFilter !== "all") && (
-                    <Button variant="outline" onClick={clearFilters}>
-                      Clear filters
-                    </Button>
-                  )}
-
-                  <UploadMusicDrawer
-                    onUploadSuccess={handleUploadSuccess}
-                    music={editingMusic}
-                    onClose={() => setEditingMusic(null)}
-                    open={!!editingMusic}
-                  />
-                </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+            <div className="relative mb-6">
+              <div className="size-24 rounded-full bg-primary/10 flex items-center justify-center">
+                <Music className="size-12 text-primary" />
+              </div>
+              <div className="absolute -bottom-2 -right-2 size-10 rounded-full bg-background border-2 flex items-center justify-center">
+                <Plus className="size-5 text-muted-foreground" />
               </div>
             </div>
-          )}
-        </TabsContent>
-      </>
+
+            <h3 className="text-xl font-semibold mb-2">
+              {globalFilter ||
+              genreFilter !== "all" ||
+              visibilityFilter !== "all"
+                ? "No tracks found"
+                : "Your music library is empty"}
+            </h3>
+
+            <p className="text-muted-foreground mb-6 max-w-sm">
+              {globalFilter ||
+              genreFilter !== "all" ||
+              visibilityFilter !== "all"
+                ? "Try adjusting your filters or search terms"
+                : "Start building your collection by uploading your first track"}
+            </p>
+
+            <div className="flex items-center gap-3">
+              {(globalFilter ||
+                genreFilter !== "all" ||
+                visibilityFilter !== "all") && (
+                <Button variant="outline" onClick={clearFilters}>
+                  <IconX className="size-4 mr-2" />
+                  Clear Filters
+                </Button>
+              )}
+              <UploadMusicDrawer
+                onUploadSuccess={handleUploadSuccess}
+                music={null}
+                showTrigger={true}
+              />
+            </div>
+          </div>
+        )}
+      </TabsContent>
 
       {showPlayer && currentTrack && (
         <MusicPlayerWidget

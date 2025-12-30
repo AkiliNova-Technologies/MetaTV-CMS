@@ -22,7 +22,7 @@ export function useReduxAuth() {
     dispatch(logout());
   };
 
-  const setUserData = (userData: { user: User }) => {
+  const setUserData = (userData: { user: User, token: string }) => {
     dispatch(setUser(userData));
   };
 

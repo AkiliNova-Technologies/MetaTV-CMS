@@ -1,7 +1,7 @@
 import * as React from "react";
 import {
   IconCamera,
-  IconChartBar,
+  // IconChartBar,
   IconCloudDataConnection,
   IconDashboard,
   IconFileDescription,
@@ -9,7 +9,6 @@ import {
   IconInnerShadowTop,
   IconMessage,
   IconMusic,
-  IconSearch,
   IconSettings,
   IconUsers,
 } from "@tabler/icons-react";
@@ -34,11 +33,11 @@ const data = {
       url: "/dashboard",
       icon: IconDashboard, // Good for dashboard/overview
     },
-    {
-      title: "Analytics",
-      url: "/dashboard/analytics",
-      icon: IconChartBar, // Good for analytics/stats
-    },
+    // {
+    //   title: "Analytics",
+    //   url: "/dashboard/analytics",
+    //   icon: IconChartBar, 
+    // },
     {
       title: "Live Stream",
       url: "/dashboard/livestream",
@@ -119,16 +118,7 @@ const data = {
       url: "/dashboard/settings",
       icon: IconSettings,
     },
-    {
-      title: "Search",
-      url: "/dashboard/search",
-      icon: IconSearch,
-    },
-    // {
-    //   title: "Get Help",
-    //   url: "#",
-    //   icon: IconHelp,
-    // },
+
     
   ],
 };
