@@ -36,6 +36,8 @@ import {
   IconClock,
   IconSquare,
   IconX,
+  IconEdit,
+  IconSearch,
 } from "@tabler/icons-react";
 import {
   flexRender,
@@ -115,8 +117,13 @@ import {
   ImageIcon,
   Tag,
   Upload,
-  Trash,
+
   Image,
+  Tv,
+  Trash2,
+  Hash,
+  Share2,
+  Radio,
 } from "lucide-react";
 import { livestreamSchema } from "@/constants/Schemas";
 import { useReduxLiveStreams } from "@/hooks/useReduxLiveStreams";
@@ -140,6 +147,7 @@ import {
 } from "./ui/sheet";
 import { useReduxPrograms } from "@/hooks/useReduxPrograms";
 import { toast } from "sonner";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 
 export const LiveStreamCategory = {
   NEWS: "NEWS",
@@ -263,6 +271,15 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof livestreamSchema>> }) {
   );
 }
 
+// Part 3: Enhanced Livestream Drawer Component
+
+interface LivestreamDrawerProps {
+  onSave: (livestream: z.infer<typeof livestreamSchema>) => void;
+  livestream?: z.infer<typeof livestreamSchema> | null;
+  onClose?: () => void;
+  open?: boolean;
+}
+
 export function LivestreamDrawer({
   onSave,
   livestream: editingLivestream,
@@ -292,6 +309,9 @@ export function LivestreamDrawer({
 
   const [newTag, setNewTag] = React.useState("");
   const [thumbnailFile, setThumbnailFile] = React.useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = React.useState<string | null>(
+    editingLivestream?.thumbnailUrl || null
+  );
   const thumbnailInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleInputChange = (field: string, value: unknown) => {
@@ -322,11 +342,18 @@ export function LivestreamDrawer({
         thumbnailUrl: editingLivestream.thumbnailUrl || "",
       });
       setThumbnailFile(null);
+      setThumbnailPreview(editingLivestream.thumbnailUrl || null);
     }
   }, [editingLivestream]);
 
   const handleFileChange = (file: File | null) => {
     setThumbnailFile(file);
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      setThumbnailPreview(previewUrl);
+    } else {
+      setThumbnailPreview(editingLivestream?.thumbnailUrl || null);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -379,13 +406,10 @@ export function LivestreamDrawer({
     setIsSaving(true);
 
     try {
-      // Prepare FormData for submission
       const submissionFormData = new FormData();
 
-      // Add all form fields to FormData
       Object.entries(formData).forEach(([key, value]) => {
         if (key === "tags" && Array.isArray(value)) {
-          // Convert tags array to JSON string
           submissionFormData.append(key, JSON.stringify(value));
         } else if (key === "programId" && value === "") {
           // Skip empty programId
@@ -394,7 +418,6 @@ export function LivestreamDrawer({
         }
       });
 
-      // Add scheduledAt as ISO string
       if (formData.scheduledAt) {
         submissionFormData.append(
           "scheduledAt",
@@ -402,7 +425,6 @@ export function LivestreamDrawer({
         );
       }
 
-      // Add thumbnail file if selected
       if (thumbnailFile) {
         submissionFormData.append("livestreamThumbnail", thumbnailFile);
       }
@@ -410,31 +432,26 @@ export function LivestreamDrawer({
       let response;
 
       if (editingLivestream) {
-        // Update existing livestream
         response = await api.put(
           `/livestreams/${editingLivestream.id}`,
           submissionFormData
         );
-        toast("Success", { description: "Livestream updated successfully" });
+        toast.success("Livestream updated successfully");
       } else {
-        // Create new livestream
         response = await api.post("/livestreams", submissionFormData);
-        toast("Success", { description: "Livestream created successfully" });
+        toast.success("Livestream created successfully");
       }
 
       const validatedData = livestreamSchema.parse(response.data);
       onSave(validatedData);
       setIsOpen(false);
 
-      // Reset form if not editing
       if (!editingLivestream) {
         resetForm();
       }
     } catch (error) {
       console.error("Operation failed:", error);
-      toast("Error", {
-        description: "Operation failed. Please try again.",
-      });
+      toast.error("Operation failed. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -456,6 +473,7 @@ export function LivestreamDrawer({
     });
     setNewTag("");
     setThumbnailFile(null);
+    setThumbnailPreview(null);
     setDragOver(false);
   };
 
@@ -472,38 +490,43 @@ export function LivestreamDrawer({
     >
       {showTrigger && (
         <SheetTrigger asChild>
-          <Button variant="outline" size="sm">
-            <IconPlus />
+          <Button variant="default" size="sm" className="gap-2">
+            <IconPlus className="size-4" />
             <span className="hidden lg:inline">Create Stream</span>
+            <span className="lg:hidden">Create</span>
           </Button>
         </SheetTrigger>
       )}
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto" side="right">
-        <SheetHeader className="space-y-1">
-          <SheetTitle className="flex items-center gap-2">
-            <Video className="size-5" />
+      
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto px-6">
+        <SheetHeader className="space-y-3 px-0">
+          <SheetTitle className="flex items-center gap-2 text-xl">
+            <div className="size-12 rounded-xl bg-gradient-to-br from-red-500/20 to-orange-500/20 flex items-center justify-center">
+              <Radio className="size-5 text-red-600" />
+            </div>
             {editingLivestream ? "Edit Livestream" : "Create New Livestream"}
           </SheetTitle>
           <SheetDescription>
             {editingLivestream
-              ? "Update your livestream details"
-              : "Configure your new livestream with all the necessary details"}
+              ? "Update your livestream details and settings"
+              : "Set up your new livestream with all necessary configuration"}
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-col gap-4 overflow-y-auto px-6 text-sm mt-0">
-          <form onSubmit={handleSubmit} className="space-y-6 mb-8">
-            {/* Basic Information */}
-            <div className="space-y-4">
-              <h3 className="font-medium text-base">Basic Information</h3>
-
+        <form onSubmit={handleSubmit} className="space-y-6 mt-6">
+          {/* Basic Information Card */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold text-base">Basic Information</h3>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="title">Title *</Label>
+                <Label htmlFor="title">Stream Title *</Label>
                 <Input
                   id="title"
                   value={formData.title}
                   onChange={(e) => handleInputChange("title", e.target.value)}
-                  placeholder="Enter livestream title"
+                  placeholder="Enter an engaging title for your stream"
                   required
                 />
               </div>
@@ -516,25 +539,24 @@ export function LivestreamDrawer({
                   onChange={(e) =>
                     handleInputChange("description", e.target.value)
                   }
-                  placeholder="Describe your livestream"
+                  placeholder="What will you be streaming about?"
                   rows={3}
                 />
               </div>
 
-              {/* Thumbnail Upload */}
+              {/* Thumbnail Upload with Preview */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <ImageIcon className="size-4" />
-                  Thumbnail
+                  Stream Thumbnail
                 </Label>
                 <div
-                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer
-                  ${
+                  className={cn(
+                    "border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer",
                     dragOver
-                      ? "border-primary bg-primary/5"
-                      : "border-muted-foreground/25"
-                  }
-                  `}
+                      ? "border-primary bg-primary/10 scale-105"
+                      : "border-muted-foreground/25 hover:border-primary/50"
+                  )}
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -549,95 +571,111 @@ export function LivestreamDrawer({
                       handleFileChange(e.target.files?.[0] || null)
                     }
                   />
-                  {thumbnailFile || formData.thumbnailUrl ? (
-                    <div className="text-sm text-muted-foreground">
-                      <Upload className="mx-auto size-6 mb-2" />
-                      Drag & drop image here or click to browse
-                      <div className="text-xs mt-1">JPG, PNG, WebP</div>
+                  {thumbnailPreview ? (
+                    <div className="relative w-full aspect-video rounded-lg overflow-hidden mb-3">
+                      <img
+                        src={thumbnailPreview}
+                        alt="Thumbnail preview"
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                   ) : (
-                    <div className="text-sm text-muted-foreground">
-                      <Upload className="mx-auto size-6 mb-2" />
-                      Drag & drop image here or click to browse
-                      <div className="text-xs mt-1">JPG, PNG, WebP</div>
-                    </div>
+                    <Upload className="mx-auto size-12 mb-3 text-muted-foreground" />
                   )}
+                  <p className="font-medium mb-1">
+                    {thumbnailPreview ? "Change thumbnail" : "Drop thumbnail here"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    or click to browse
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    JPG, PNG, WebP (16:9 ratio recommended)
+                  </p>
                 </div>
-                <div className="flex items-center space-x-2 mt-2 max-w-xs text-white truncate">
-                  {/* Attachment Icon */}
-                  {thumbnailFile ? (
-                    <Image className="w-5 h-5" />
-                  ) : formData.thumbnailUrl ? (
-                    <>
-                      <Image className="w-5 h-5" />
-                      "Using existing thumbnail"
-                    </>
-                  ) : (
-                    ""
-                  )}
 
-                  {/* File name or existing thumbnail */}
-                  <span className="w-fit truncate">
-                    {thumbnailFile
-                      ? thumbnailFile.name
-                      : formData.thumbnailUrl
-                      ? "Using existing thumbnail"
-                      : ""}
-                  </span>
-
-                  {/* Delete/Remove button */}
-                  {thumbnailFile && (
+                {thumbnailFile && (
+                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <Image className="size-5 text-primary flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate text-sm">
+                        {thumbnailFile.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {(thumbnailFile.size / 1024).toFixed(2)} KB
+                      </p>
+                    </div>
                     <Button
-                      variant="default"
+                      variant="ghost"
+                      size="icon"
                       type="button"
-                      onClick={() => handleFileChange(null)}
-                      className="ml-auto text-xs text-white bg-background hover:bg-background hover:text-red-600"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFileChange(null);
+                      }}
+                      className="hover:bg-destructive hover:text-destructive-foreground"
                     >
-                      <Trash className="w-5 h-5" />
+                      <Trash2 className="size-4" />
                     </Button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Scheduling */}
-            <div className="space-y-4">
-              <h3 className="font-medium text-base">Scheduling</h3>
-
+          {/* Scheduling Card */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold text-base flex items-center gap-2">
+                <Clock className="size-4" />
+                Scheduling
+              </h3>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="status" className="flex items-center gap-2">
-                  <Clock className="size-4" />
-                  Status
-                </Label>
+                <Label htmlFor="status">Stream Status</Label>
                 <Select
                   value={formData.status}
-                  onValueChange={(
-                    value: "LIVE" | "SCHEDULED" | "ENDED" | "PREPARING"
-                  ) => handleInputChange("status", value)}
+                  onValueChange={(value: "LIVE" | "SCHEDULED" | "ENDED" | "PREPARING") =>
+                    handleInputChange("status", value)
+                  }
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PREPARING">Preparing</SelectItem>
-                    <SelectItem value="SCHEDULED">Scheduled</SelectItem>
-                    <SelectItem value="LIVE">Live</SelectItem>
-                    <SelectItem value="ENDED">Ended</SelectItem>
+                    <SelectItem value="PREPARING">
+                      <div className="flex items-center gap-2">
+                        <Clock className="size-4" />
+                        Preparing
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="SCHEDULED">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="size-4" />
+                        Scheduled
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="LIVE">
+                      <div className="flex items-center gap-2">
+                        <Radio className="size-4" />
+                        Live
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="ENDED">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="size-4" />
+                        Ended
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label
-                  htmlFor="scheduledAt"
-                  className="flex items-center gap-2"
-                >
-                  <Calendar className="size-4" />
-                  Scheduled Date *
-                </Label>
+                <Label htmlFor="scheduledAt">Scheduled Date & Time *</Label>
                 <Input
                   id="scheduledAt"
-                  type="date"
+                  type="datetime-local"
                   value={formData.scheduledAt}
                   onChange={(e) =>
                     handleInputChange("scheduledAt", e.target.value)
@@ -645,17 +683,20 @@ export function LivestreamDrawer({
                   required
                 />
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Stream Settings */}
-            <div className="space-y-4">
-              <h3 className="font-medium text-base">Stream Settings</h3>
-
+          {/* Stream Settings Card */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold text-base flex items-center gap-2">
+                <Video className="size-4" />
+                Stream Settings
+              </h3>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="quality" className="flex items-center gap-2">
-                  <Video className="size-4" />
-                  Quality
-                </Label>
+                <Label htmlFor="quality">Stream Quality</Label>
                 <Select
                   value={formData.quality}
                   onValueChange={(value) => handleInputChange("quality", value)}
@@ -672,7 +713,18 @@ export function LivestreamDrawer({
                 </Select>
               </div>
 
-              {/* <div className="flex items-center space-x-2">
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Video className="size-4 text-muted-foreground" />
+                  <div>
+                    <Label htmlFor="isRecording" className="cursor-pointer font-medium">
+                      Record Stream
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Save stream for later viewing
+                    </p>
+                  </div>
+                </div>
                 <Checkbox
                   id="isRecording"
                   checked={formData.isRecording}
@@ -680,23 +732,21 @@ export function LivestreamDrawer({
                     handleInputChange("isRecording", checked)
                   }
                 />
-                <Label htmlFor="isRecording" className="cursor-pointer">
-                  Record this stream
-                </Label>
-              </div> */}
-            </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Visibility & Categorization */}
-            <div className="space-y-4">
-              <h3 className="font-medium text-base">
-                Visibility & Categorization
+          {/* Visibility & Categorization Card */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold text-base flex items-center gap-2">
+                <Eye className="size-4" />
+                Visibility & Categories
               </h3>
-
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="visibility" className="flex items-center gap-2">
-                  <Eye className="size-4" />
-                  Visibility
-                </Label>
+                <Label htmlFor="visibility">Visibility</Label>
                 <Select
                   value={formData.visibility}
                   onValueChange={(value: "PUBLIC" | "PRIVATE" | "UNLISTED") =>
@@ -730,9 +780,7 @@ export function LivestreamDrawer({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category" className="flex items-center gap-2">
-                  Category
-                </Label>
+                <Label htmlFor="category">Category</Label>
                 <Select
                   value={formData.category}
                   onValueChange={(value) =>
@@ -751,6 +799,41 @@ export function LivestreamDrawer({
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="programId">Program</Label>
+                <Select
+                  value={formData.programId}
+                  onValueChange={(value) =>
+                    handleInputChange("programId", value === "none" ? "" : value)
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue
+                      placeholder={
+                        loading ? "Loading programs..." : "Select a program (optional)"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {programs.length === 0 ? (
+                      <div className="px-3 py-2 text-muted-foreground text-sm">
+                        No programs available
+                      </div>
+                    ) : (
+                      programs.map((program) => (
+                        <SelectItem
+                          key={program.id}
+                          value={program.id.toString()}
+                        >
+                          {program.name || `Program #${program.id}`}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Tag className="size-4" />
@@ -761,7 +844,7 @@ export function LivestreamDrawer({
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
                     onKeyPress={handleTagKeyPress}
-                    placeholder="Add a tag"
+                    placeholder="Add a tag (press Enter)"
                   />
                   <Button type="button" onClick={addTag} variant="outline">
                     Add
@@ -780,7 +863,7 @@ export function LivestreamDrawer({
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="size-4 hover:bg-destructive hover:text-destructive-foreground"
+                          className="size-4 hover:bg-destructive hover:text-destructive-foreground ml-1"
                           onClick={() => removeTag(tag)}
                         >
                           <IconX className="size-3" />
@@ -790,85 +873,45 @@ export function LivestreamDrawer({
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
 
-              <div className="space-y-2">
-                <Label htmlFor="programId" className="flex items-center gap-2">
-                  Program
-                </Label>
-                <Select
-                  value={formData.programId}
-                  onValueChange={(value) =>
-                    handleInputChange(
-                      "programId",
-                      value === "none" ? "" : value
-                    )
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue
-                      placeholder={
-                        loading ? "Loading programs..." : "Select a program"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {programs.length === 0 ? (
-                      <div className="px-3 py-2 text-muted-foreground text-sm">
-                        No programs available
-                      </div>
-                    ) : (
-                      <>
-                        {programs.map((program) => (
-                          <SelectItem
-                            key={program.id}
-                            value={program.id.toString()}
-                          >
-                            {program.name || `Program #${program.id}`}
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 pt-4 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={() => setIsOpen(false)}
-                disabled={isSaving}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className="flex-1"
-                disabled={!formData.title || !formData.scheduledAt || isSaving}
-                // disabled={!formData.title || isSaving}
-              >
-                {isSaving ? (
-                  <>
-                    <IconLoader className="mr-2 size-4 animate-spin" />
-                    {editingLivestream ? "Updating..." : "Creating..."}
-                  </>
-                ) : (
-                  <>
-                    <Video className="mr-2 size-4" />
-                    {editingLivestream ? "Update Stream" : "Create Stream"}
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        </div>
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => setIsOpen(false)}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1"
+              disabled={!formData.title || !formData.scheduledAt || isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <IconLoader className="mr-2 size-4 animate-spin" />
+                  {editingLivestream ? "Updating..." : "Creating..."}
+                </>
+              ) : (
+                <>
+                  <Radio className="mr-2 size-4" />
+                  {editingLivestream ? "Update Stream" : "Create Stream"}
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
       </SheetContent>
     </Sheet>
   );
 }
+
+  
 
 function LivestreamCard({
   livestream,
@@ -905,221 +948,255 @@ function LivestreamCard({
   };
 
   return (
-    <Card className="w-full max-w-sm overflow-hidden hover:shadow-lg transition-shadow duration-200 pt-0">
-      {/* Thumbnail Section */}
-      <div className="relative group cursor-pointer" onClick={handleJoinStream}>
-        <div className="aspect-video bg-muted overflow-hidden">
-          {(isImageLoading || imageError) && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted border-1">
-              {isImageLoading && !imageError && (
-                <IconLoader className="animate-spin size-6 text-muted-foreground" />
-              )}
-              {imageError && (
-                <>
-                  <IconAlertCircle className="size-6 text-red-500 mb-2" />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRetryImage}
-                    className="flex items-center gap-2"
-                  >
-                    <IconRefresh className="size-4" />
-                    Retry
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-          {livestream.thumbnailUrl && (
-            <img
-              src={livestream.thumbnailUrl}
-              alt={`Thumbnail for ${livestream.title}`}
-              className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-200 ${
-                imageError ? "hidden" : ""
-              }`}
-              loading="lazy"
-              onLoad={() => setIsImageLoading(false)}
-              onError={() => {
-                setIsImageLoading(false);
-                setImageError(true);
-              }}
-            />
-          )}
+    <Card className="group relative overflow-hidden bg-gradient-to-br from-card to-card/50 hover:shadow-2xl hover:border-primary/30 transition-all duration-500 hover:-translate-y-1">
+      {/* Thumbnail Section with Enhanced Overlay */}
+      <div className="relative aspect-video bg-gradient-to-br from-red-500/5 via-muted to-orange-500/5 overflow-hidden cursor-pointer">
+        {/* Image Loading/Error States */}
+        {(isImageLoading || imageError) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted">
+            {isImageLoading && !imageError && (
+              <IconLoader className="animate-spin size-8 text-muted-foreground" />
+            )}
+            {imageError && (
+              <>
+                <IconAlertCircle className="size-8 text-red-500 mb-2" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRetryImage}
+                  className="gap-2"
+                >
+                  <IconRefresh className="size-4" />
+                  Retry
+                </Button>
+              </>
+            )}
+          </div>
+        )}
 
-          {livestream.status === "LIVE" && (
-            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+        {/* Thumbnail Image */}
+        {livestream.thumbnailUrl && (
+          <img
+            src={livestream.thumbnailUrl}
+            alt={livestream.title}
+            className={cn(
+              "w-full h-full object-cover transition-transform duration-500",
+              "group-hover:scale-105",
+              imageError && "hidden"
+            )}
+            loading="lazy"
+            onLoad={() => setIsImageLoading(false)}
+            onError={() => {
+              setIsImageLoading(false);
+              setImageError(true);
+            }}
+          />
+        )}
+
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+
+        {/* Play Button Overlay (for LIVE streams) */}
+        {livestream.status === "LIVE" && (
+          <div 
+            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300"
+            onClick={handleJoinStream}
+          >
+            <div className="relative">
+              <div className="absolute inset-0 bg-red-500/40 rounded-full blur-xl scale-150 animate-pulse" />
               <Button
                 size="icon"
-                className="bg-red-600 hover:bg-red-700 text-white rounded-full"
-                aria-label="Join livestream"
-                onClick={handleJoinStream}
+                className="relative size-16 rounded-full shadow-2xl hover:scale-110 transition-transform bg-red-600/90 backdrop-blur-sm"
               >
-                <Play className="size-5 ml-0.5" />
+                <Play className="size-8 text-white ml-1" fill="white" />
               </Button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="absolute top-2 left-2">
+        {/* Status Badge (Top Left) */}
+        <div className="absolute top-3 left-3">
           {getStatusBadge(livestream.status)}
         </div>
 
+        {/* LIVE Indicator (Bottom Left) */}
         {livestream.status === "LIVE" && (
-          <Badge
-            variant="destructive"
-            className="absolute bottom-2 left-2 bg-red-600 text-white text-xs px-2 py-0.5 animate-pulse"
-          >
-            <Wifi className="size-3 mr-1" />
-            LIVE
+          <Badge className="absolute bottom-3 left-3 bg-red-600/90 backdrop-blur-sm border-0 shadow-lg gap-1.5">
+            <div className="size-2 rounded-full bg-white animate-pulse" />
+            <Wifi className="size-3" />
+            <span className="font-bold">LIVE</span>
           </Badge>
         )}
 
+        {/* Duration Badge (Bottom Right) */}
         {(livestream.duration ?? 0) > 0 && (
-          <Badge
-            variant="secondary"
-            className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-1.5 py-0.5"
-          >
-            <Clock className="size-3 mr-1" />
+          <Badge className="absolute bottom-3 right-3 bg-black/80 backdrop-blur-sm border-0 text-white gap-1">
+            <Clock className="size-3" />
             {formatDuration(livestream.duration ?? 0)}
           </Badge>
         )}
 
-        <Badge
-          variant="outline"
-          className="absolute top-2 right-2 bg-white/90 text-black text-xs px-1.5 py-0.5"
-        >
+        {/* Quality Badge (Top Right) */}
+        <Badge variant="secondary" className="absolute top-3 right-3 bg-white/90 dark:bg-black/80 backdrop-blur-sm border-0 font-medium">
           {livestream.quality}
         </Badge>
-      </div>
 
-      <CardHeader className="px-4">
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-1 text-muted-foreground">
-            {livestream.status === "LIVE" ? (
-              <>
-                <Users className="size-3" />
-                <span>{formatViews(livestream.currentViewers)} watching</span>
-              </>
-            ) : (
-              <>
-                <Eye className="size-3" />
-                <span>{formatViews(livestream.totalViews)} views</span>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <Calendar className="size-3" />
-            <span>{formattedDate}</span>
+        {/* Bottom Info Bar */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/50 to-transparent">
+          <div className="flex items-center justify-between text-white/90 text-xs font-medium">
+            <div className="flex items-center gap-1.5">
+              {livestream.status === "LIVE" ? (
+                <>
+                  <Users className="size-3.5" />
+                  <span>{formatViews(livestream.currentViewers)} watching</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="size-3.5" />
+                  <span>{formatViews(livestream.totalViews)} views</span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Calendar className="size-3.5" />
+              <span>{formattedDate}</span>
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className="flex items-start gap-2">
-          <div className="flex-1 min-w-0">
+      {/* Content Section */}
+      <CardHeader className="pb-3">
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0 space-y-1.5">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <h2
-                    className="font-semibold text-lg leading-tight line-clamp-2 hover:text-primary cursor-pointer"
+                  <h3
+                    className="font-bold text-base leading-tight line-clamp-2 hover:text-primary cursor-pointer transition-colors"
                     onClick={handleJoinStream}
                   >
                     {livestream.title}
-                  </h2>
+                  </h3>
                 </TooltipTrigger>
                 <TooltipContent>{livestream.title}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
 
-            {livestream.program && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Program: {livestream.program.name}
-              </p>
-            )}
-            {livestream.category && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Category: {livestream.category}
-              </p>
+            {/* Program and Category */}
+            {(livestream.program || livestream.category) && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {livestream.program && (
+                  <div className="flex items-center gap-1">
+                    <Tv className="size-3" />
+                    <span>{livestream.program.name}</span>
+                  </div>
+                )}
+                {livestream.category && (
+                  <div className="flex items-center gap-1">
+                    <Hash className="size-3" />
+                    <span>{livestream.category}</span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
+
+          {/* Actions Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-6 shrink-0">
+              <Button variant="ghost" size="icon" className="size-8 hover:bg-primary/10">
                 <MoreVertical className="size-4" />
-                <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-48">
               {livestream.status === "LIVE" && (
-                <DropdownMenuItem onClick={handleJoinStream}>
-                  Join Stream
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem onClick={handleJoinStream}>
+                    <Play className="size-4 mr-2" />
+                    Join Stream
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
               )}
-              <DropdownMenuItem onClick={handleEdit}>Edit</DropdownMenuItem>
-              <DropdownMenuItem>Share</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleEdit}>
+                <IconEdit className="size-4 mr-2" />
+                Edit Stream
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Share2 className="size-4 mr-2" />
+                Share
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {livestream.status !== "LIVE" && (
-                <DeleteLivestreamDialog
-                  livestream={livestream}
-                  onDelete={() => {}}
-                />
+                <DeleteLivestreamDialog livestream={livestream} onDelete={() => {}} />
               )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-1.5 px-4">
-        <div className="flex items-center justify-between text-xs">
+      <CardContent className="space-y-3 pt-0">
+        {/* Stats Row */}
+        <div className="flex items-center justify-between text-xs border-t pt-3">
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Recording:</span>
-            <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+            <Badge 
+              variant={livestream.isRecording ? "default" : "outline"} 
+              className={cn(
+                "text-xs px-2 py-0 gap-1",
+                livestream.isRecording && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"
+              )}
+            >
               {livestream.isRecording ? (
-                <CheckCircle className="size-3 text-green-500 mr-1" />
+                <CheckCircle className="size-3" />
               ) : (
-                <XCircle className="size-3 text-red-500 mr-1" />
+                <XCircle className="size-3" />
               )}
               {livestream.isRecording ? "On" : "Off"}
             </Badge>
           </div>
-          <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+          <Badge variant="outline" className="text-xs px-2 py-0 gap-1">
             {livestream.visibility === "PUBLIC" ? (
-              <Globe className="size-3 mr-1" />
+              <Globe className="size-3" />
             ) : (
-              <Lock className="size-3 mr-1" />
+              <Lock className="size-3" />
             )}
             {livestream.visibility.toLowerCase()}
           </Badge>
         </div>
 
+        {/* Peak Viewers */}
         {(livestream.peakViewers ?? 0) > 0 && (
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>
-              Peak viewers: {formatViews(livestream.peakViewers ?? 0)}
-            </span>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Users className="size-3" />
+            <span>Peak: {formatViews(livestream.peakViewers ?? 0)} viewers</span>
           </div>
         )}
 
+        {/* Tags */}
         {livestream.tags && livestream.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1.5">
             {livestream.tags.slice(0, 3).map((tag, index) => (
               <Badge
                 key={index}
-                variant="secondary"
-                className="text-xs px-2 py-0.5"
+                variant="outline"
+                className="text-xs px-2 py-0 font-medium border-primary/20 hover:bg-primary/10 transition-colors"
               >
                 {tag}
               </Badge>
             ))}
             {livestream.tags.length > 3 && (
-              <Badge
-                variant="outline"
-                className="text-xs px-2 py-0.5 text-muted-foreground"
-              >
+              <Badge variant="outline" className="text-xs px-2 py-0 text-muted-foreground">
                 +{livestream.tags.length - 3}
               </Badge>
             )}
           </div>
         )}
       </CardContent>
+
+      {/* Hover Accent Line */}
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-red-500/50 to-red-500 scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left" />
     </Card>
   );
 }
@@ -1136,13 +1213,31 @@ function TableCellViewer({
   };
 
   return (
-    <Button
-      variant="link"
-      className="text-foreground w-fit px-0 text-left"
-      onClick={handleWatchClick}
-    >
-      {livestream.title}
-    </Button>
+    <div className="flex items-center gap-3">
+      <Avatar className="size-10 border">
+        <AvatarImage
+          src={livestream.thumbnailUrl ?? undefined}
+          alt={livestream.title}
+        />
+        <AvatarFallback className="bg-gradient-to-br from-red-500/20 to-orange-500/20">
+          <Tv className="size-5 text-red-600" />
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex flex-col">
+        <Button
+          variant="link"
+          className="text-foreground p-0 h-auto font-semibold text-left justify-start hover:text-primary"
+          onClick={handleWatchClick}
+        >
+          {livestream.title}
+        </Button>
+        {livestream.category && (
+          <span className="text-xs text-muted-foreground">
+            {livestream.category}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1163,9 +1258,11 @@ function DeleteLivestreamDialog({
       await api.delete(`/livestreams/${livestream.id}`);
       onDelete(livestream.id);
       await livestreamsReload();
+      toast.success("Livestream deleted successfully");
       setIsOpen(false);
     } catch (err) {
       console.error("Failed to delete livestream:", err);
+      toast.error("Failed to delete livestream");
     } finally {
       setIsDeleting(false);
     }
@@ -1175,19 +1272,25 @@ function DeleteLivestreamDialog({
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
       <AlertDialogTrigger asChild>
         <DropdownMenuItem
-          className="text-red-600 cursor-pointer"
+          className="text-red-600 focus:text-red-600 cursor-pointer"
           onSelect={(e) => e.preventDefault()}
         >
+          <Trash2 className="size-4 mr-2" />
           Delete
         </DropdownMenuItem>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete the
-            livestream <span className="font-semibold">{livestream.title}</span>{" "}
-            from the database.
+          <AlertDialogTitle className="flex items-center gap-2">
+            <div className="size-10 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+              <IconAlertCircle className="size-5 text-red-600" />
+            </div>
+            Delete Livestream?
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-base pt-2">
+            Are you sure you want to delete{" "}
+            <span className="font-semibold">{livestream.title}</span>? This
+            action cannot be undone and will permanently remove all stream data.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1203,7 +1306,10 @@ function DeleteLivestreamDialog({
                 Deleting...
               </>
             ) : (
-              "Delete Livestream"
+              <>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Livestream
+              </>
             )}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -1211,6 +1317,8 @@ function DeleteLivestreamDialog({
     </AlertDialog>
   );
 }
+
+// Part 4: Main LiveStream Table Component
 
 export function LiveStreamTable({
   livestreams,
@@ -1223,23 +1331,19 @@ export function LiveStreamTable({
     reload: livestreamsReload,
     loading,
   } = useReduxLiveStreams();
-  const [data, setData] =
-    React.useState<z.infer<typeof livestreamSchema>[]>(livestreams);
-  const [editingLivestream, setEditingLivestream] = React.useState<z.infer<
-    typeof livestreamSchema
-  > | null>(null);
+  
+  const [data, setData] = React.useState<z.infer<typeof livestreamSchema>[]>(livestreams);
+  const [editingLivestream, setEditingLivestream] = React.useState<z.infer<typeof livestreamSchema> | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
-  const [viewMode, setViewMode] = React.useState<"table" | "card">("table");
+  const [viewMode, setViewMode] = React.useState<"table" | "card">("card");
   const [rowSelection, setRowSelection] = React.useState({});
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({});
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
-  );
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = React.useState("");
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
-    pageSize: 10,
+    pageSize: 12,
   });
 
   const sortableId = React.useId();
@@ -1257,40 +1361,37 @@ export function LiveStreamTable({
     if (!livestreamData.length) {
       livestreamsReload();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [livestreamData.length, livestreamsReload]);
 
   const dataIds = React.useMemo(
     () => livestreams.map((livestream) => livestream.id),
     [livestreams]
   );
 
-  const handleCreateLivestream = (
-    livestream: z.infer<typeof livestreamSchema>
-  ) => {
-    // Add to your data array
+  const handleCreateLivestream = (livestream: z.infer<typeof livestreamSchema>) => {
     setData((prev) => [...prev, livestream]);
-    // Optional: Send to API
   };
 
-  const handleUpdateLivestream = (
-    updatedLivestream: z.infer<typeof livestreamSchema>
-  ) => {
-    // Update in your data array
+  const handleUpdateLivestream = (updatedLivestream: z.infer<typeof livestreamSchema>) => {
     setData((prev) =>
       prev.map((stream) =>
         stream.id === updatedLivestream.id ? updatedLivestream : stream
       )
     );
-    // Optional: Send to API
   };
 
   const handleDeleteLivestream = React.useCallback((livestreamId: number) => {
-    setData((prev) =>
-      prev.filter((livestream) => livestream.id !== livestreamId)
-    );
+    setData((prev) => prev.filter((livestream) => livestream.id !== livestreamId));
   }, []);
 
+  const filteredData = React.useMemo(() => {
+    if (!globalFilter) return data;
+    return data.filter((stream) =>
+      `${stream.title} ${stream.category} ${stream.program?.name} ${stream.status}`
+        .toLowerCase()
+        .includes(globalFilter.toLowerCase())
+    );
+  }, [data, globalFilter]);
 
   const columns = React.useMemo<ColumnDef<z.infer<typeof livestreamSchema>>[]>(
     () => [
@@ -1298,6 +1399,7 @@ export function LiveStreamTable({
         id: "drag",
         header: () => null,
         cell: ({ row }) => <DragHandle id={row.original.id} />,
+        size: 40,
       },
       {
         id: "select",
@@ -1326,10 +1428,11 @@ export function LiveStreamTable({
         ),
         enableSorting: false,
         enableHiding: false,
+        size: 40,
       },
       {
         id: "title",
-        header: "Title",
+        header: "Stream",
         cell: ({ row }) => <TableCellViewer livestream={row.original} />,
         enableHiding: false,
       },
@@ -1340,38 +1443,50 @@ export function LiveStreamTable({
       },
       {
         accessorKey: "currentViewers",
-        header: "Current Viewers",
+        header: "Viewers",
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Users className="size-4 text-muted-foreground" />
-            {formatViews(row.original.currentViewers)}
+          <div className="flex items-center gap-1.5">
+            <Users className="size-3.5 text-muted-foreground" />
+            <span className="font-medium">{formatViews(row.original.currentViewers)}</span>
           </div>
         ),
       },
       {
         accessorKey: "totalViews",
         header: "Total Views",
-        cell: ({ row }) => formatViews(row.original.totalViews),
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1.5">
+            <Eye className="size-3.5 text-muted-foreground" />
+            <span>{formatViews(row.original.totalViews)}</span>
+          </div>
+        ),
       },
       {
         accessorKey: "quality",
         header: "Quality",
         cell: ({ row }) => (
-          <Badge variant="outline">{row.original.quality}</Badge>
+          <Badge variant="outline" className="font-medium">
+            {row.original.quality}
+          </Badge>
         ),
       },
       {
         accessorKey: "visibility",
         header: "Visibility",
         cell: ({ row }) => (
-          <Badge variant="outline">
+          <Badge variant="outline" className="gap-1">
+            {row.original.visibility === "PUBLIC" ? (
+              <Globe className="size-3" />
+            ) : (
+              <Lock className="size-3" />
+            )}
             {row.original.visibility.toLowerCase()}
           </Badge>
         ),
       },
       {
         accessorKey: "scheduledAt",
-        header: () => <div className="w-full text-left">Scheduled At</div>,
+        header: "Scheduled",
         cell: ({ row }) => {
           const date = new Date(row.original.scheduledAt ?? "");
           const formatted = isNaN(date.getTime())
@@ -1383,7 +1498,12 @@ export function LiveStreamTable({
                 hour: "2-digit",
                 minute: "2-digit",
               });
-          return <Label>{formatted}</Label>;
+          return (
+            <div className="flex items-center gap-1.5 text-sm">
+              <Calendar className="size-3.5 text-muted-foreground" />
+              {formatted}
+            </div>
+          );
         },
       },
       {
@@ -1393,22 +1513,26 @@ export function LiveStreamTable({
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="data-[state=open]:bg-muted text-muted-foreground flex size-8"
                 size="icon"
+                className="data-[state=open]:bg-muted size-8"
               >
-                <IconDotsVertical />
+                <IconDotsVertical className="size-4" />
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-32">
+            <DropdownMenuContent align="end" className="w-48">
               {row.original.status === "LIVE" && (
-                <DropdownMenuItem
-                  onClick={() =>
-                    navigate(`/dashboard/livestreams/watch/${row.original.id}`)
-                  }
-                >
-                  Join Stream
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem
+                    onClick={() =>
+                      navigate(`/dashboard/livestreams/watch/${row.original.id}`)
+                    }
+                  >
+                    <Play className="size-4 mr-2" />
+                    Join Stream
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
               )}
               <DropdownMenuItem
                 onClick={() => {
@@ -1416,9 +1540,13 @@ export function LiveStreamTable({
                   setIsDrawerOpen(true);
                 }}
               >
-                Edit
+                <IconEdit className="size-4 mr-2" />
+                Edit Stream
               </DropdownMenuItem>
-              <DropdownMenuItem>Share</DropdownMenuItem>
+              <DropdownMenuItem>
+                <Share2 className="size-4 mr-2" />
+                Share
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {row.original.status !== "LIVE" && (
                 <DeleteLivestreamDialog
@@ -1429,13 +1557,14 @@ export function LiveStreamTable({
             </DropdownMenuContent>
           </DropdownMenu>
         ),
+        size: 50,
       },
     ],
     [handleDeleteLivestream, navigate]
   );
 
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns,
     state: {
       sorting,
@@ -1465,81 +1594,63 @@ export function LiveStreamTable({
       setData((data) => {
         const oldIndex = dataIds.indexOf(Number(active.id));
         const newIndex = dataIds.indexOf(Number(over.id));
-        const newData = arrayMove(data, oldIndex, newIndex);
-        // Optional: Save new order to backend
-        // api.put('/livestreams/order', { order: newData.map(livestream => livestream.id) });
-        return newData;
+        return arrayMove(data, oldIndex, newIndex);
       });
     }
   }
 
-  const handleViewModeSelect = (value: string) => {
-    if (value === "table" || value === "card") {
-      setViewMode(value);
-    }
-  };
+  const clearSearch = () => setGlobalFilter("");
 
   return (
     <Tabs
-      defaultValue="table"
+      defaultValue="card"
       className="w-full flex-col justify-start gap-6"
       value={viewMode}
       onValueChange={(value) => setViewMode(value as "table" | "card")}
     >
+      {/* Header */}
       <div className="flex items-center justify-between px-4 lg:px-6">
-        <Label htmlFor="view-selector" className="sr-only">
-          View
-        </Label>
-        <Select value={viewMode} onValueChange={handleViewModeSelect}>
-          <SelectTrigger
-            className="flex w-fit @4xl/main:hidden"
-            size="sm"
-            id="view-selector"
-          >
-            <SelectValue placeholder="Select a view" />
+        <Select value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
+          <SelectTrigger className="flex w-fit @4xl/main:hidden" size="sm">
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="table">Table View</SelectItem>
             <SelectItem value="card">Card View</SelectItem>
+            <SelectItem value="table">Table View</SelectItem>
           </SelectContent>
         </Select>
+
         <TabsList className="hidden @4xl/main:flex">
-          <TabsTrigger value="table" className="flex items-center gap-2">
-            <IconTable className="size-4" />
-            Table View
-          </TabsTrigger>
           <TabsTrigger value="card" className="flex items-center gap-2">
             <IconLayoutGrid className="size-4" />
             Card View
           </TabsTrigger>
+          <TabsTrigger value="table" className="flex items-center gap-2">
+            <IconTable className="size-4" />
+            Table View
+          </TabsTrigger>
         </TabsList>
+
         <div className="flex items-center gap-2">
           {viewMode === "table" && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <IconLayoutColumns />
-                  <span className="hidden lg:inline">Customize Columns</span>
-                  <span className="lg:hidden">Columns</span>
-                  <IconChevronDown />
+                <Button variant="outline" size="sm" className="gap-2">
+                  <IconLayoutColumns className="size-4" />
+                  <span className="hidden lg:inline">Columns</span>
+                  <IconChevronDown className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 {table
                   .getAllColumns()
-                  .filter(
-                    (column) =>
-                      typeof column.accessorFn !== "undefined" &&
-                      column.getCanHide()
-                  )
+                  .filter((column) => typeof column.accessorFn !== "undefined" && column.getCanHide())
                   .map((column) => (
                     <DropdownMenuCheckboxItem
                       key={column.id}
                       className="capitalize"
                       checked={column.getIsVisible()}
-                      onCheckedChange={(value) =>
-                        column.toggleVisibility(!!value)
-                      }
+                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
                     >
                       {column.id}
                     </DropdownMenuCheckboxItem>
@@ -1566,152 +1677,182 @@ export function LiveStreamTable({
         </div>
       </div>
 
-      <>
-        <TabsContent
-          value="table"
-          className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
-        >
-          <div className="overflow-hidden rounded-lg border">
-            <DndContext
-              collisionDetection={closestCenter}
-              modifiers={[restrictToVerticalAxis]}
-              onDragEnd={handleDragEnd}
-              sensors={sensors}
-              id={sortableId}
+      {/* Search Bar */}
+      <div className="px-4 lg:px-6">
+        <div className="relative max-w-md">
+          <IconSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            placeholder="Search livestreams by title, category, or status..."
+            value={globalFilter}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            className="pl-10 pr-10"
+          />
+          {globalFilter && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 transform -translate-y-1/2 size-6"
+              onClick={clearSearch}
             >
-              <Table>
-                <TableHeader className="bg-muted sticky top-0 z-10">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead key={header.id} colSpan={header.colSpan}>
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {table.getRowModel().rows?.length ? (
-                    <SortableContext
-                      items={dataIds}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {table.getRowModel().rows.map((row) => (
-                        <DraggableRow key={row.id} row={row} />
-                      ))}
-                    </SortableContext>
-                  ) : loading ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={columns.length}
-                        className="h-24 text-center text-muted-foreground"
-                      >
-                        <div className="flex flex-col items-center gap-2">
-                          <IconLoader className="animate-spin size-8 text-muted-foreground" />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        colSpan={columns.length}
-                        className="h-24 text-center text-muted-foreground"
-                      >
-                        <div className="flex flex-col items-center gap-2">
-                          <span>No livestreams found.</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </DndContext>
-          </div>
-          <div className="flex items-center justify-between px-4">
-            <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
-              {table.getFilteredSelectedRowModel().rows.length} of{" "}
-              {table.getFilteredRowModel().rows.length} row(s) selected.
-            </div>
-            <div className="flex w-full items-center gap-8 lg:w-fit">
-              <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
-                <Select
-                  value={`${table.getState().pagination.pageSize}`}
-                  onValueChange={(value) => table.setPageSize(Number(value))}
-                >
-                  <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                    <SelectValue
-                      placeholder={table.getState().pagination.pageSize}
-                    />
-                  </SelectTrigger>
-                  <SelectContent side="top">
-                    {[10, 20, 30, 40, 50].map((pageSize) => (
-                      <SelectItem key={pageSize} value={`${pageSize}`}>
-                        {pageSize}
-                      </SelectItem>
+              <IconX className="size-3" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Table View */}
+      <TabsContent value="table" className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6">
+        <div className="overflow-hidden rounded-lg border">
+          <DndContext
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            onDragEnd={handleDragEnd}
+            sensors={sensors}
+            id={sortableId}
+          >
+            <Table>
+              <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id} colSpan={header.colSpan}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex w-fit items-center justify-center text-sm font-medium">
-                Page {table.getState().pagination.pageIndex + 1} of{" "}
-                {table.getPageCount()}
-              </div>
-              <div className="ml-auto flex items-center gap-2 lg:ml-0">
-                <Button
-                  variant="outline"
-                  className="hidden h-8 w-8 p-0 lg:flex"
-                  onClick={() => table.setPageIndex(0)}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <span className="sr-only">Go to first page</span>
-                  <IconChevronsLeft />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="size-8"
-                  size="icon"
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <span className="sr-only">Go to previous page</span>
-                  <IconChevronLeft />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="size-8"
-                  size="icon"
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                >
-                  <span className="sr-only">Go to next page</span>
-                  <IconChevronRight />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="hidden size-8 lg:flex"
-                  size="icon"
-                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                  disabled={!table.getCanNextPage()}
-                >
-                  <span className="sr-only">Go to last page</span>
-                  <IconChevronsRight />
-                </Button>
-              </div>
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} className="h-32 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <IconLoader className="size-8 animate-spin text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">Loading livestreams...</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : table.getRowModel().rows?.length ? (
+                  <SortableContext items={dataIds} strategy={verticalListSortingStrategy}>
+                    {table.getRowModel().rows.map((row) => (
+                      <DraggableRow key={row.id} row={row} />
+                    ))}
+                  </SortableContext>
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} className="h-32 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <Radio className="size-12 text-muted-foreground opacity-50" />
+                        <div>
+                          <p className="font-semibold mb-1">No livestreams found</p>
+                          <p className="text-sm text-muted-foreground">
+                            {globalFilter ? "Try adjusting your search" : "Create your first livestream to get started"}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {globalFilter && (
+                            <Button variant="outline" onClick={clearSearch}>
+                              Clear search
+                            </Button>
+                          )}
+                          <Button variant="ghost" onClick={() => livestreamsReload()}>
+                            <IconRefresh className="size-4 mr-2" />
+                            Retry
+                          </Button>
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </DndContext>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex items-center justify-between px-4">
+          <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
+            {table.getFilteredSelectedRowModel().rows.length} of{" "}
+            {table.getFilteredRowModel().rows.length} stream(s) selected
+          </div>
+          <div className="flex w-full items-center gap-8 lg:w-fit">
+            <div className="hidden items-center gap-2 lg:flex">
+              <Label htmlFor="rows-per-page" className="text-sm font-medium">
+                Rows per page
+              </Label>
+              <Select
+                value={`${table.getState().pagination.pageSize}`}
+                onValueChange={(value) => table.setPageSize(Number(value))}
+              >
+                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent side="top">
+                  {[10, 20, 30, 40, 50].map((pageSize) => (
+                    <SelectItem key={pageSize} value={`${pageSize}`}>
+                      {pageSize}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex w-fit items-center justify-center text-sm font-medium">
+              Page {table.getState().pagination.pageIndex + 1} of{" "}
+              {table.getPageCount()}
+            </div>
+            <div className="ml-auto flex items-center gap-2 lg:ml-0">
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 lg:flex"
+                onClick={() => table.setPageIndex(0)}
+                disabled={!table.getCanPreviousPage()}
+              >
+                <IconChevronsLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+              >
+                <IconChevronLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+              >
+                <IconChevronRight />
+              </Button>
+              <Button
+                variant="outline"
+                className="hidden size-8 lg:flex"
+                size="icon"
+                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                disabled={!table.getCanNextPage()}
+              >
+                <IconChevronsRight />
+              </Button>
             </div>
           </div>
-        </TabsContent>
-        <TabsContent value="card" className="flex flex-col px-4 lg:px-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {data.map((livestream) => (
+        </div>
+      </TabsContent>
+
+      {/* Card View */}
+      <TabsContent value="card" className="px-4 lg:px-6">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-64 gap-3">
+            <IconLoader className="size-12 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Loading livestreams...</p>
+          </div>
+        ) : filteredData.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredData.map((livestream) => (
               <LivestreamCard
                 key={livestream.id}
                 livestream={{
@@ -1719,10 +1860,7 @@ export function LiveStreamTable({
                   description: livestream.description ?? "",
                   scheduledAt: livestream.scheduledAt ?? "",
                   startedAt: livestream.startedAt ?? undefined,
-                  endedAt:
-                    livestream.endedAt === null
-                      ? undefined
-                      : livestream.endedAt,
+                  endedAt: livestream.endedAt === null ? undefined : livestream.endedAt,
                   thumbnailUrl: livestream.thumbnailUrl ?? undefined,
                 }}
                 onEdit={(livestream) => {
@@ -1732,13 +1870,42 @@ export function LiveStreamTable({
               />
             ))}
           </div>
-          {data.length === 0 && (
-            <div className="flex items-center justify-center h-32 text-muted-foreground">
-              No livestreams found.
+        ) : (
+          <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+            <div className="relative mb-6">
+              <div className="size-24 rounded-full bg-red-500/10 flex items-center justify-center">
+                <Radio className="size-12 text-red-600" />
+              </div>
+              <div className="absolute -bottom-2 -right-2 size-10 rounded-full bg-background border-2 flex items-center justify-center">
+                <IconPlus className="size-5 text-muted-foreground" />
+              </div>
             </div>
-          )}
-        </TabsContent>
-      </>
+
+            <h3 className="text-xl font-semibold mb-2">
+              {globalFilter ? "No livestreams found" : "No livestreams yet"}
+            </h3>
+
+            <p className="text-muted-foreground mb-6 max-w-sm">
+              {globalFilter
+                ? "Try adjusting your search terms or clear the filter"
+                : "Start broadcasting by creating your first livestream"}
+            </p>
+
+            <div className="flex items-center gap-3">
+              {globalFilter && (
+                <Button variant="outline" onClick={clearSearch}>
+                  <IconX className="size-4 mr-2" />
+                  Clear Search
+                </Button>
+              )}
+              <LivestreamDrawer
+                onSave={handleCreateLivestream}
+                showTrigger={true}
+              />
+            </div>
+          </div>
+        )}
+      </TabsContent>
     </Tabs>
   );
 }

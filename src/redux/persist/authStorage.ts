@@ -1,26 +1,41 @@
-import { store } from "../store";
-import { setUser } from "../slices/authSlice";
-import localStorage from "redux-persist/es/storage";
 
-const AUTH_KEY = "auth_state";
+import storage from 'redux-persist/lib/storage';
+import type { AuthState } from "../slices/authSlice";
 
-export const loadAuthFromStorage = async () => {
-  const stored = await localStorage.getItem(AUTH_KEY);
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored);
-      store.dispatch(setUser(parsed));
-    } catch (error) {
-      console.error("Failed to parse auth state: ", error);
-    }
-  }
-};
+const AUTH_KEY = "persist:root"; // This matches your redux-persist key
 
-export const saveAuthToStorage = async () => {
-  const auth = store.getState().auth;
+/**
+ * Load auth from storage (for manual operations)
+ * Note: redux-persist handles this automatically
+ */
+export const loadAuthFromStorage = async (): Promise<AuthState | null> => {
   try {
-    await localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+    const stored = await storage.getItem(AUTH_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // redux-persist stores it under "auth" key
+      if (parsed.auth) {
+        return JSON.parse(parsed.auth);
+      }
+    }
+    return null;
   } catch (error) {
-    console.error("Failed to save auth state: ", error);
+    console.error("Failed to load auth state:", error);
+    return null;
   }
 };
+
+/**
+ * Clear auth from storage (for logout)
+ * Note: Your logout action should handle this via redux-persist
+ */
+export const clearAuthFromStorage = async () => {
+  try {
+    await storage.removeItem(AUTH_KEY);
+  } catch (error) {
+    console.error("Failed to clear auth state:", error);
+  }
+};
+
+// Note: You don't need saveAuthToStorage because redux-persist
+// automatically saves state changes to localStorage!

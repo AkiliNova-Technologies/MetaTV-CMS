@@ -10,14 +10,29 @@ export default function DashboardPrograms() {
   const programData = React.useMemo(() => {
     if (!Array.isArray(programs)) return [];
 
-    return programs.map((program) => ({
-      id: program.id,
-      name: program.name,
-      description: program.description,
-      createdAt: program.createdAt,
-      videos: program.videos,
-      subscribers: program.subscribers,
-    }));
+    return programs.map((program) => {
+      const videos = program.videos
+        ? program.videos.map((video) => ({ id: video.id }))
+        : [];
+
+      const subscribers = program.subscribers
+        ? program.subscribers.map((user) => ({ id: user.id }))
+        : [];
+
+      return {
+        id: program.id,
+        name: program.name,
+        description: program.description,
+        createdAt: program.createdAt,
+        videos,
+        subscribers,
+
+        _count: program._count || {
+          videos: program.videoCount || 0,
+          subscribers: program.subscriberCount || 0,
+        },
+      };
+    });
   }, [programs]);
 
   // Calculate metrics for cards
@@ -91,7 +106,6 @@ export default function DashboardPrograms() {
               </p>
             </div>
           </div>
-
           <div className="px-6">
             <ProgramSectionCards cards={cards} layout="auto" />
           </div>

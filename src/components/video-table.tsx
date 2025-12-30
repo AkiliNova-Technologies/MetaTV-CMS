@@ -110,6 +110,8 @@ import {
   Play,
   XCircle,
   Image as ImageIcon,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import type { videoSchema } from "@/constants/Schemas";
 import { useReduxVideos } from "@/hooks/useReduxVideos";
@@ -378,7 +380,7 @@ function VideoCard({ video }: { video: z.infer<typeof videoSchema> }) {
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-[180px]">
               <DropdownMenuItem onClick={handleWatchClick}>
                 <Play className="size-4 mr-2" />
                 Watch
@@ -388,7 +390,7 @@ function VideoCard({ video }: { video: z.infer<typeof videoSchema> }) {
                   navigate(`/dashboard/videos/edit-video/${video.id}`)
                 }
               >
-                <IconDotsVertical className="size-4 mr-2" />
+                <Edit className="size-4 mr-2" />
                 Edit
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -539,7 +541,7 @@ function DeleteVideoDialog({
           className="text-red-600 focus:text-red-600 cursor-pointer"
           onSelect={(e) => e.preventDefault()}
         >
-          <XCircle className="size-4 mr-2" />
+          <Trash2 className="size-4 mr-2" />
           Delete
         </DropdownMenuItem>
       </AlertDialogTrigger>

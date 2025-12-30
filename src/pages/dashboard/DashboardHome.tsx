@@ -27,11 +27,26 @@ import { useReduxVideos } from "@/hooks/useReduxVideos";
 import { useReduxLiveStreams } from "@/hooks/useReduxLiveStreams";
 import { useReduxPrograms } from "@/hooks/useReduxPrograms";
 import { useReduxMusic } from "@/hooks/useReduxMusic";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  TrendingUp,
+  ArrowRight,
+  Sparkles,
+  Video,
+  Music,
+  Users,
+  Calendar,
+  Eye,
+  Activity,
+} from "lucide-react";
+import { IconBroadcast } from "@tabler/icons-react";
+import { useNavigate } from "react-router-dom";
 
 const getTrend = (value: number): "up" | "down" => (value > 0 ? "up" : "down");
 
 type VideoTableVideo = z.infer<typeof videoSchema> & { programId?: number };
-
 type MusicTableSong = z.infer<typeof musicSchema>;
 
 interface MusicResponse {
@@ -44,8 +59,9 @@ interface MusicResponse {
 }
 
 export default function DashboardHome() {
+  const navigate = useNavigate();
   const { videos } = useReduxVideos();
-  const { music: musicResponse } = useReduxMusic(); 
+  const { music: musicResponse } = useReduxMusic();
   const { users } = useReduxUsers();
   const { livestreams } = useReduxLiveStreams();
   const { programs } = useReduxPrograms();
@@ -343,102 +359,197 @@ export default function DashboardHome() {
     [totalPrograms, totalVideos, totalSubscribers, recentPrograms]
   );
 
+  // Quick stats for hero section
+  // const quickStats = React.useMemo(
+  //   () => ({
+  //     totalContent: videos.length + music.length + livestreams.length,
+  //     totalViews:
+  //       videos.reduce((acc, v) => acc + (v.views || 0), 0) +
+  //       livestreams.reduce((acc, s) => acc + s.totalViews, 0),
+  //     activeNow: livestreams.filter((s) => s.status === "LIVE").length,
+  //     teamSize: users.length,
+  //   }),
+  //   [videos, music, livestreams, users]
+  // );
+
   return (
-    <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-0">
-      <div className="@container/main flex flex-1 flex-col gap-2">
-        <div className="flex flex-col gap-4 md:gap-6 md:py-0">
-          <div className="px-3 lg:px-6">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Overview
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
-              Summary of MetaTV's performance
-            </p>
-          </div>
-
-          <div className="space-y-6">
-            <div className="flex items-center justify-between px-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Team Members
-              </h2>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Team metrics
-              </span>
-            </div>
-            <div className="px-4">
-              <TeamSectionCards cards={teamCards} layout="auto"/>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="flex items-center justify-between px-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Current Programs
-              </h2>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Performance metrics
-              </span>
-            </div>
-            <div className="px-4">
-              <ProgramSectionCards cards={programCards} layout="auto"/>
-            </div>
-          </div>
-
-          {/* Video and Music Sections with Headings */}
-          <div className="grid grid-cols-1 md:grid-cols-2 px-4 lg:px-6">
-            {/* Video Section with right border */}
-            <div className="space-y-4 md:pr-6 md:border-r md:border-gray-200 dark:md:border-gray-700">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Video Content
-                </h2>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  Performance metrics
-                </span>
+    <div className="w-full">
+      {/* Hero Section */}
+      <div className="relative overflow-hidden border-b px-6 py-12">
+        <div className="absolute inset-0  opacity-5" />
+        <div className="relative max-w-8xl mx-auto">
+          <div className="flex items-start justify-between flex-wrap gap-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="gap-1.5">
+                  <Activity className="size-3 animate-pulse" />
+                  Live Dashboard
+                </Badge>
+                <Badge variant="outline" className="gap-1.5">
+                  <Eye className="size-3" />
+                  Real-time Data
+                </Badge>
               </div>
-              <VideoSectionCards
-                cards={videoCards}
-                videos={videos as VideoTableVideo[]}
-                layout="2x2"
-              />
-            </div>
-
-            {/* Music Section with left padding */}
-            <div className="space-y-4 md:pl-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Music Content
-                </h2>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  Performance metrics
-                </span>
+              <div>
+                <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2">
+                  Welcome Back
+                </h1>
+                <p className="text-lg text-muted-foreground max-w-2xl">
+                  Here's what's happening with your content today
+                </p>
               </div>
-              <MusicSectionCards
-                cards={musicCards}
-                music={music as MusicTableSong[]}
-                layout="2x2"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="flex items-center justify-between px-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                LiveStream Content
-              </h2>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Performance metrics
-              </span>
-            </div>
-            <div className="px-4">
-              <LivestreamSectionCards
-                livestreams={livestreams}
-                cards={streamCards}
-                layout="auto"
-              />
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="px-6 py-8 max-w-8xl mx-auto space-y-12">
+        {/* Livestream Section - Full Width for Prominence */}
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-gradient-to-br from-red-500/20 to-orange-500/20 flex items-center justify-center">
+                  <IconBroadcast className="size-5 text-red-600" />
+                </div>
+                <h2 className="text-2xl font-bold">Livestream Activity</h2>
+              </div>
+              <p className="text-sm text-muted-foreground ml-[52px]">
+                Monitor your live broadcasts and viewer engagement
+              </p>
+            </div>
+            <Button variant="outline" size="sm" className="gap-2" onClick={()=> navigate("/dashboard/livestream")}>
+              View All
+              <ArrowRight className="size-4" />
+            </Button>
+          </div>
+          <LivestreamSectionCards
+            livestreams={livestreams}
+            cards={streamCards}
+            layout="2x2"
+          />
+        </section>
+
+        {/* Video & Music Split Section */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Video Section */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+                    <Video className="size-5 text-purple-600" />
+                  </div>
+                  <h2 className="text-2xl font-bold">Video Content</h2>
+                </div>
+                <p className="text-sm text-muted-foreground ml-[52px]">
+                  Video library analytics
+                </p>
+              </div>
+            </div>
+            <VideoSectionCards
+              cards={videoCards}
+              videos={videos as VideoTableVideo[]}
+              layout="2x2"
+            />
+          </div>
+
+          {/* Music Section */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center">
+                    <Music className="size-5 text-blue-600" />
+                  </div>
+                  <h2 className="text-2xl font-bold">Music Library</h2>
+                </div>
+                <p className="text-sm text-muted-foreground ml-[52px]">
+                  Audio catalog insights
+                </p>
+              </div>
+            </div>
+            <MusicSectionCards
+              cards={musicCards}
+              music={music as MusicTableSong[]}
+              layout="2x2"
+            />
+          </div>
+        </section>
+
+        {/* Programs Section - Full Width */}
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-gradient-to-br from-yellow-500/20 to-amber-500/20 flex items-center justify-center">
+                  <Calendar className="size-5 text-yellow-600" />
+                </div>
+                <h2 className="text-2xl font-bold">Programs Overview</h2>
+              </div>
+              <p className="text-sm text-muted-foreground ml-[52px]">
+                Track your program performance and growth
+              </p>
+            </div>
+            <Button variant="outline" size="sm" className="gap-2" onClick={()=> navigate("/dashboard/programs")}>
+              Manage Programs
+              <ArrowRight className="size-4" />
+            </Button>
+          </div>
+          <ProgramSectionCards cards={programCards} layout="auto" />
+        </section>
+
+        {/* Team Section - Full Width */}
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center">
+                  <Users className="size-5 text-green-600" />
+                </div>
+                <h2 className="text-2xl font-bold">Team Members</h2>
+              </div>
+              <p className="text-sm text-muted-foreground ml-[52px]">
+                Monitor team activity and collaboration
+              </p>
+            </div>
+            <Button variant="outline" size="sm" className="gap-2" onClick={()=> navigate("/dashboard/team")}>
+              Manage Team
+              <ArrowRight className="size-4" />
+            </Button>
+          </div>
+          <TeamSectionCards cards={teamCards} layout="2x2" />
+        </section>
+
+        {/* Insights Card */}
+        <Card className="border-dashed bg-gradient-to-br from-primary/5 to-background">
+          <CardContent className="p-8">
+            <div className="flex items-start gap-6 flex-col md:flex-row">
+              <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Sparkles className="size-8 text-primary" />
+              </div>
+              <div className="flex-1 space-y-3">
+                <h3 className="text-2xl font-bold">Performance Insights</h3>
+                <p className="text-muted-foreground text-lg">
+                  Your content is performing well! Video views are up 8% and
+                  music plays increased by 10% this month. Keep up the great
+                  work!
+                </p>
+                <div className="flex gap-3 pt-2">
+                  <Button className="gap-2">
+                    <TrendingUp className="size-4" />
+                    View Detailed Analytics
+                  </Button>
+                  <Button variant="outline" className="gap-2">
+                    <ArrowRight className="size-4" />
+                    Export Report
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

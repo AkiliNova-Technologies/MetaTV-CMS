@@ -1,78 +1,146 @@
-// @/utils/api.ts
-import axios, { AxiosHeaders } from "axios";
-import type { InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1/";
+
+// Create axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_PUBLIC_API_URL,
-  timeout: 30000,
+  baseURL: API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
-// Create a variable to store the token
-let authToken: string | null = null;
+// Token management without Redux dependency
+let currentToken: string | null = null;
+let refreshTokenCallback: (() => Promise<string>) | null = null;
+let logoutCallback: (() => void) | null = null;
 
-// Function to set the token from outside
+// Set callbacks from outside (will be set in store configuration)
+export const setTokenRefreshCallback = (callback: () => Promise<string>) => {
+  refreshTokenCallback = callback;
+};
+
+export const setLogoutCallback = (callback: () => void) => {
+  logoutCallback = callback;
+};
+
 export const setAuthToken = (token: string | null) => {
-  authToken = token;
+  currentToken = token;
+  if (token) {
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common["Authorization"];
+  }
 };
 
-// Function to get the token
-export const getAuthToken = (): string | null => {
-  return authToken;
-};
-
-// Function to clear the token
 export const clearAuthToken = () => {
-  authToken = null;
+  currentToken = null;
+  delete api.defaults.headers.common["Authorization"];
 };
 
+// Track if we're currently refreshing
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value?: unknown) => void;
+  reject: (reason?: any) => void;
+}> = [];
+
+// Process queued requests after token refresh
+const processQueue = (error: Error | null, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+
+  failedQueue = [];
+};
+
+// Request interceptor to add auth token
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    if (!config.headers) {
-      config.headers = new AxiosHeaders();
+    if (currentToken && config.headers) {
+      config.headers.Authorization = `Bearer ${currentToken}`;
     }
-
-    // Use the stored token
-    if (authToken) {
-      config.headers.set("Authorization", `Bearer ${authToken}`);
-    }
-
-    if (config.data instanceof FormData) {
-      delete config.headers["Content-Type"];
-    } else {
-      config.headers.set("Content-Type", "application/json");
-    }
-    
     return config;
   },
-  (error) => {
-    console.error("API Request Error:", {
-      url: error.config?.url,
-      method: error.config?.method,
-      data: error.config?.data,
-      message: error.message,
-    });
+  (error: AxiosError) => {
     return Promise.reject(error);
   }
 );
 
+// Response interceptor to handle token refresh
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // Handle authentication errors
-    if (error.response?.status === 401) {
-      console.warn("Authentication failed - token may be expired");
-      // Clear the token on auth errors
-      clearAuthToken();
+  (response) => {
+    return response;
+  },
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean;
+    };
+
+    // If error is 401 and we haven't retried yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Skip refresh for auth endpoints
+      if (
+        originalRequest.url?.includes("/auth/login") ||
+        originalRequest.url?.includes("/auth/refresh-token") ||
+        originalRequest.url?.includes("/auth/register")
+      ) {
+        return Promise.reject(error);
+      }
+
+      // If already refreshing, queue this request
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            if (originalRequest.headers && token) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
+            return api(originalRequest);
+          })
+          .catch((err) => {
+            return Promise.reject(err);
+          });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        // Use the callback for token refresh
+        if (refreshTokenCallback) {
+          const newToken = await refreshTokenCallback();
+          
+          // Update the failed request with new token
+          if (originalRequest.headers) {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          }
+
+          // Process queued requests
+          processQueue(null, newToken);
+
+          // Retry the original request
+          return api(originalRequest);
+        } else {
+          throw new Error("Token refresh callback not set");
+        }
+      } catch (refreshError) {
+        // Refresh failed, logout user
+        processQueue(refreshError as Error, null);
+        if (logoutCallback) {
+          logoutCallback();
+        }
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
     }
-    
-    console.error("API Response Error:", {
-      url: error.config?.url,
-      method: error.config?.method,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      message: error.message,
-    });
+
     return Promise.reject(error);
   }
 );

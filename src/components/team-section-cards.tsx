@@ -1,6 +1,6 @@
-import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react"
+import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react";
 
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardAction,
@@ -8,23 +8,26 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
 
 export type CardData = {
-  title: string
-  value: string | number
-  trend: "up" | "down"
-  percentage: string
-  footerMain: string
-  footerSub: string
-}
+  title: string;
+  value: string | number;
+  trend: "up" | "down";
+  percentage: string;
+  footerMain: string;
+  footerSub: string;
+};
 
 interface TeamSectionCardsProps {
-  cards?: CardData[]
-  layout?: "auto" | "2x2" | "1x1" | "4col"
+  cards?: CardData[];
+  layout?: "auto" | "2x2" | "1x1" | "4x1" | "4col";
 }
 
-export function TeamSectionCards({ cards, layout = "auto", }: TeamSectionCardsProps) {
+export function TeamSectionCards({
+  cards,
+  layout = "auto",
+}: TeamSectionCardsProps) {
   const defaultCards: CardData[] = [
     {
       title: "Total Revenue",
@@ -58,7 +61,7 @@ export function TeamSectionCards({ cards, layout = "auto", }: TeamSectionCardsPr
       footerMain: "Steady performance increase",
       footerSub: "Meets growth projections",
     },
-  ]
+  ];
 
   // Determine grid classes based on layout prop
   const getGridClasses = () => {
@@ -67,6 +70,8 @@ export function TeamSectionCards({ cards, layout = "auto", }: TeamSectionCardsPr
         return "grid grid-cols-2 gap-4";
       case "1x1":
         return "grid grid-cols-1 gap-4";
+      case "4x1":
+        return "grid grid-cols-1 @md/main:grid-cols-2 @lg/main:grid-cols-4 @xl/main:grid-cols-4 @5xl/main:grid-cols-4 gap-4";
       case "4col":
         return "grid grid-cols-1 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 gap-4";
       case "auto":
@@ -75,41 +80,40 @@ export function TeamSectionCards({ cards, layout = "auto", }: TeamSectionCardsPr
     }
   };
 
-
-  const dataToRender =layout === "2x2" ? cards!.slice(0, 4) : cards ?? defaultCards
-
+  const dataToRender =
+    layout === "2x2" ? cards!.slice(0, 4) : cards ?? defaultCards;
 
   return (
     <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs ">
       <div className={getGridClasses()}>
-      {dataToRender.map((card, idx) => {
-        const isUp = card.trend === "up"
-        const Icon = isUp ? IconTrendingUp : IconTrendingDown
+        {dataToRender.map((card, idx) => {
+          const isUp = card.trend === "up";
+          const Icon = isUp ? IconTrendingUp : IconTrendingDown;
 
-        return (
-          <Card key={idx} className="@container/card">
-            <CardHeader>
-              <CardDescription>{card.title}</CardDescription>
-              <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                {card.value}
-              </CardTitle>
-              <CardAction>
-                <Badge variant="outline">
-                  <Icon />
-                  {card.percentage}
-                </Badge>
-              </CardAction>
-            </CardHeader>
-            <CardFooter className="flex-col items-start gap-1.5 text-sm">
-              <div className="line-clamp-1 flex gap-2 font-medium">
-                {card.footerMain} <Icon className="size-4" />
-              </div>
-              <div className="text-muted-foreground">{card.footerSub}</div>
-            </CardFooter>
-          </Card>
-        )
-      })}
+          return (
+            <Card key={idx} className="@container/card">
+              <CardHeader>
+                <CardDescription>{card.title}</CardDescription>
+                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                  {card.value}
+                </CardTitle>
+                <CardAction>
+                  <Badge variant="outline">
+                    <Icon />
+                    {card.percentage}
+                  </Badge>
+                </CardAction>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1.5 text-sm">
+                <div className="line-clamp-1 flex gap-2 font-medium">
+                  {card.footerMain} <Icon className="size-4" />
+                </div>
+                <div className="text-muted-foreground">{card.footerSub}</div>
+              </CardFooter>
+            </Card>
+          );
+        })}
+      </div>
     </div>
-    </div>
-  )
+  );
 }

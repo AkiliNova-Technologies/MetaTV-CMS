@@ -35,12 +35,9 @@ import {
   IconRefresh,
   IconLoader,
 } from "@tabler/icons-react";
-import api from "@/utils/api";
 import { useReduxAuth } from "@/hooks/useReduxAuth";
 import { useReduxPrograms } from "@/hooks/useReduxPrograms";
-import type { Program } from "@/types/program";
-import type { videoSchema } from "@/constants/Schemas";
-import { z } from "zod";
+import { useReduxVideos } from "@/hooks/useReduxVideos";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -55,36 +52,17 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// Extend videoSchema to include additional fields
-type Video = z.infer<typeof videoSchema> & {
-  programId?: number;
-  category?: string[];
-  likes?: number;
-  dislikes?: number;
-  views?: number;
-  program?: Program;
-  uploadedAt?: string;
-  programSubscribers?: number;
-};
-
 type Comment = {
   id: number;
-  content: string;
+  text: string;
   userId: number;
-  username: string;
-  userAvatar: string;
+  user: {
+    id: number;
+    username: string;
+    avatar: string;
+  };
   createdAt: string;
-  likes: number;
-};
-
-type RelatedVideo = {
-  id: number;
-  title: string;
-  thumbnailUrl: string;
-  duration: number;
-  views: number;
-  programId: number;
-  uploadedAt: string;
+  likes?: any[];
 };
 
 // Utility functions
@@ -181,22 +159,47 @@ function ThumbnailImage({
 
 export default function DashboardWatchVideo() {
   const navigate = useNavigate();
-  const { id: videoId } = useParams<{ id: string }>();
-  const { user } = useReduxAuth();
+  const { id } = useParams<{ id: string }>();
+  const videoId = parseInt(id || "0", 10);
+
+  // Redux hooks
+  const { user, isAuthenticated } = useReduxAuth();
   const { programs } = useReduxPrograms();
-  const [video, setVideo] = useState<Video | null>(null);
+
+  // Video hook with all the new methods
+  const {
+    currentVideo: video,
+    relatedVideos,
+    loadVideo,
+    loadRelated,
+    likeVideo,
+    dislikeVideo,
+    isLiked,
+    isDisliked,
+    isLikeLoading,
+    commentOnVideo,
+    isCommentLoading,
+    recordView,
+    checkLikeStatus,
+  } = useReduxVideos();
+
+  // Program subscription hook
+  const {
+    subscribe,
+    isSubscribed,
+    checkSubscriptionStatus,
+    isSubscriptionLoading,
+    getProgramById,
+  } = useReduxPrograms();
+
+  // Local state
   const [comments, setComments] = useState<Comment[]>([]);
-  const [relatedVideos, setRelatedVideos] = useState<RelatedVideo[]>([]);
   const [newComment, setNewComment] = useState("");
-  const [isLiked, setIsLiked] = useState(false);
-  const [isDisliked, setIsDisliked] = useState(false);
-  const [isSubscribed, setIsSubscribed] = useState(false);
-  const [fetching, setFetching] = useState(true);
-  const [commentLoading, setCommentLoading] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
   const [showRelatedVideos, setShowRelatedVideos] = useState(true);
+  const [fetching, setFetching] = useState(true);
 
-  // Fetch video, comments, and related videos on mount
+  // Load video data on mount
   useEffect(() => {
     if (!videoId) {
       console.error("No videoId provided in URL");
@@ -208,58 +211,15 @@ export default function DashboardWatchVideo() {
       try {
         setFetching(true);
 
-        // Fetch video
-        const videoResponse = await api.get(`/videos/${videoId}`);
-        const fetchedVideo: Video = videoResponse.data;
-        setVideo(fetchedVideo);
+        // Load video using Redux hook
+        await loadVideo(videoId);
 
-        // Check like/dislike status
-        if (user) {
-          try {
-            const likeResponse = await api.get(`/videos/${videoId}/like`);
-            setIsLiked(likeResponse.data.isLiked || false);
-            setIsDisliked(likeResponse.data.isDisliked || false);
-          } catch (error) {
-            console.error("Failed to fetch like status:", error);
-          }
+        // Record view
+        recordView(videoId);
 
-          // Check program subscription status
-          if (fetchedVideo.programId) {
-            try {
-              const subscribeResponse = await api.get(`/programs/${fetchedVideo.programId}/subscribe`);
-              setIsSubscribed(subscribeResponse.data.isSubscribed || false);
-            } catch (error) {
-              console.error("Failed to fetch subscription status:", error);
-            }
-          }
-        }
-
-        // Fetch comments if allowed
-        if (fetchedVideo.allowComments) {
-          try {
-            const commentsResponse = await api.get(`/videos/${videoId}/comments`);
-            setComments(commentsResponse.data);
-          } catch (error) {
-            console.error("Failed to fetch comments:", error);
-          }
-        }
-
-        // Fetch related videos
-        try {
-          const category = Array.isArray(fetchedVideo.category)
-            ? fetchedVideo.category[0]
-            : fetchedVideo.category || "";
-          const relatedResponse = await api.get(`/videos/related?category=${category}`);
-          setRelatedVideos(relatedResponse.data);
-        } catch (error) {
-          console.error("Failed to fetch related videos:", error);
-        }
-
-        // Increment view count
-        try {
-          await api.post(`/videos/${videoId}/view`);
-        } catch (error) {
-          console.error("Failed to increment view count:", error);
+        // Check like status if authenticated
+        if (isAuthenticated) {
+          await checkLikeStatus(videoId);
         }
       } catch (error) {
         console.error("Failed to fetch video data:", error);
@@ -270,60 +230,64 @@ export default function DashboardWatchVideo() {
     };
 
     fetchVideoData();
-  }, [videoId, user]);
+  }, [videoId, isAuthenticated]);
 
+  // Load related videos and subscription status when video loads
+  useEffect(() => {
+    if (!video) return;
+
+    // Load related videos
+    const category = Array.isArray(video.category)
+      ? video.category[0]
+      : video.category || "";
+
+    if (category) {
+      loadRelated(videoId, category);
+    }
+
+    // Check program subscription if authenticated and video has program
+    if (isAuthenticated && video.programId) {
+      checkSubscriptionStatus(video.programId);
+    }
+
+    // Fetch comments if allowed
+    if (video.allowComments) {
+      fetchComments();
+    }
+  }, [video, isAuthenticated]);
+
+  // Fetch comments
+  const fetchComments = async () => {
+    try {
+      const response = await fetch(`/api/videos/${videoId}/comments`);
+      const data = await response.json();
+      setComments(data);
+    } catch (error) {
+      console.error("Failed to fetch comments:", error);
+    }
+  };
+
+  // Handle like
   const handleLikeToggle = async () => {
-    if (!user) {
+    if (!isAuthenticated) {
       toast.error("Please log in to like the video");
       return;
     }
-
-    try {
-      const response = await api.post(`/videos/${videoId}/like`);
-      setIsLiked(response.data.isLiked);
-      setIsDisliked(false);
-      setVideo((prev) =>
-        prev
-          ? {
-              ...prev,
-              likes: response.data.likes,
-            }
-          : prev
-      );
-      toast.success(response.data.isLiked ? "Liked!" : "Like removed");
-    } catch (error) {
-      console.error("Failed to toggle like:", error);
-      toast.error("Failed to update like");
-    }
+    await likeVideo(videoId);
   };
 
+  // Handle dislike
   const handleDislikeToggle = async () => {
-    if (!user) {
+    if (!isAuthenticated) {
       toast.error("Please log in to dislike the video");
       return;
     }
-
-    try {
-      const response = await api.post(`/videos/${videoId}/dislike`);
-      setIsDisliked(response.data.isDisliked);
-      setIsLiked(false);
-      setVideo((prev) =>
-        prev
-          ? {
-              ...prev,
-              dislikes: response.data.dislikes,
-            }
-          : prev
-      );
-      toast.success(response.data.isDisliked ? "Disliked!" : "Dislike removed");
-    } catch (error) {
-      console.error("Failed to toggle dislike:", error);
-      toast.error("Failed to update dislike");
-    }
+    await dislikeVideo(videoId);
   };
 
+  // Handle subscribe
   const handleSubscribe = async () => {
-    if (!user) {
+    if (!isAuthenticated) {
       toast.error("Please log in to subscribe");
       return;
     }
@@ -333,62 +297,39 @@ export default function DashboardWatchVideo() {
       return;
     }
 
-    try {
-      const response = await api.post(`/programs/${video.programId}/subscribe`);
-      setIsSubscribed(response.data.isSubscribed);
-      setVideo((prev) =>
-        prev
-          ? {
-              ...prev,
-              programSubscribers: response.data.subscribers,
-            }
-          : prev
-      );
-      toast.success(
-        response.data.isSubscribed ? "Subscribed!" : "Unsubscribed"
-      );
-    } catch (error) {
-      console.error("Failed to toggle subscription:", error);
-      toast.error("Failed to update subscription");
-    }
+    await subscribe(video.programId);
   };
 
+  // Handle comment submit
   const handleCommentSubmit = async () => {
-    if (!user) {
+    if (!isAuthenticated) {
       toast.error("Please log in to comment");
       return;
     }
+
     if (!newComment.trim()) {
       toast.error("Comment cannot be empty");
       return;
     }
 
-    setCommentLoading(true);
-    try {
-      const response = await api.post(`/videos/${videoId}/comments`, {
-        content: newComment,
-        userId: user.id,
-      });
-      setComments((prev) => [response.data, ...prev]);
+    const comment = await commentOnVideo(videoId, newComment);
+    if (comment) {
+      setComments((prev) => [comment, ...prev]);
       setNewComment("");
-      toast.success("Comment added!");
-    } catch (error) {
-      console.error("Failed to add comment:", error);
-      toast.error("Failed to add comment");
-    } finally {
-      setCommentLoading(false);
     }
   };
 
-  const handleRelatedVideoClick = (videoId: number) => {
-    navigate(`/dashboard/videos/watch-video/${videoId}`);
+  // Handle related video click
+  const handleRelatedVideoClick = (relatedVideoId: number) => {
+    navigate(`/dashboard/videos/watch-video/${relatedVideoId}`);
   };
 
+  // Handle share
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
         title: video?.title,
-        text: video?.description,
+        text: video?.description || "",
         url: window.location.href,
       });
     } else {
@@ -397,6 +338,7 @@ export default function DashboardWatchVideo() {
     }
   };
 
+  // Loading state
   if (fetching) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -408,6 +350,7 @@ export default function DashboardWatchVideo() {
     );
   }
 
+  // Video not found
   if (!video) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -430,13 +373,29 @@ export default function DashboardWatchVideo() {
     );
   }
 
-  const programName =
-    programs.find((p: Program) => p.id === (video.programId || video.program?.id))?.name ||
-    "Unknown Program";
-  const programSubscribers = video.programSubscribers || video.program?.totalSubscribers || 0;
+  // Get program data
+  const program = video.programId ? getProgramById(video.programId) : null;
+  const programName = program?.name || video.program?.name || "Unknown Program";
+  const programSubscribers = program?._count?.subscribers || 0;
+
+  // Get like/dislike counts from _count
+  const likeCount = video._count?.likes || 0;
+  const dislikeCount = video._count?.dislikes || 0;
+
+  // Check if liked/disliked
+  const videoIsLiked = isLiked(videoId);
+  const videoIsDisliked = isDisliked(videoId);
+
+  // Check if subscribed
+  const programIsSubscribed = video.programId ? isSubscribed(video.programId) : false;
+
+  // Check loading states
+  const likeIsLoading = isLikeLoading(videoId);
+  const commentIsLoading = isCommentLoading(videoId);
+  const subscriptionIsLoading = video.programId ? isSubscriptionLoading(video.programId) : false;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+    <div className="min-h-screen">
       <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Back button */}
         <Button
@@ -502,14 +461,14 @@ export default function DashboardWatchVideo() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
-                            variant={isLiked ? "default" : "outline"}
+                            variant={videoIsLiked ? "default" : "outline"}
                             size="sm"
                             onClick={handleLikeToggle}
-                            disabled={!user}
+                            disabled={!user || likeIsLoading}
                             className="gap-2"
                           >
-                            <ThumbsUp className={`size-4 ${isLiked ? "fill-current" : ""}`} />
-                            <span>{video.likes?.toLocaleString() || 0}</span>
+                            <ThumbsUp className={`size-4 ${videoIsLiked ? "fill-current" : ""}`} />
+                            <span>{likeCount.toLocaleString()}</span>
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Like this video</TooltipContent>
@@ -520,14 +479,14 @@ export default function DashboardWatchVideo() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
-                            variant={isDisliked ? "default" : "outline"}
+                            variant={videoIsDisliked ? "default" : "outline"}
                             size="sm"
                             onClick={handleDislikeToggle}
-                            disabled={!user}
+                            disabled={!user || likeIsLoading}
                             className="gap-2"
                           >
-                            <ThumbsDown className={`size-4 ${isDisliked ? "fill-current" : ""}`} />
-                            <span>{video.dislikes?.toLocaleString() || 0}</span>
+                            <ThumbsDown className={`size-4 ${videoIsDisliked ? "fill-current" : ""}`} />
+                            <span>{dislikeCount.toLocaleString()}</span>
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Dislike this video</TooltipContent>
@@ -583,12 +542,14 @@ export default function DashboardWatchVideo() {
                     </div>
                   </div>
                   <Button
-                    variant={isSubscribed ? "secondary" : "default"}
+                    variant={programIsSubscribed ? "secondary" : "default"}
                     onClick={handleSubscribe}
-                    disabled={!user || !video.programId}
+                    disabled={!user || !video.programId || subscriptionIsLoading}
                     className="gap-2"
                   >
-                    {isSubscribed ? (
+                    {subscriptionIsLoading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : programIsSubscribed ? (
                       <>
                         <BellOff className="size-4" />
                         Subscribed
@@ -639,7 +600,7 @@ export default function DashboardWatchVideo() {
                     </div>
                     <div className="flex items-center gap-1">
                       <IconVideo className="size-3" />
-                      <span>{video.resolution || "HD"}</span>
+                      <span>{video.resolution === "FOUR_K" ? "4K" : video.resolution || "HD"}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Calendar className="size-3" />
@@ -707,24 +668,24 @@ export default function DashboardWatchVideo() {
                           value={newComment}
                           onChange={(e) => setNewComment(e.target.value)}
                           className="min-h-[100px] resize-none"
-                          disabled={!user || commentLoading}
+                          disabled={!user || commentIsLoading}
                         />
                         {newComment && (
                           <div className="flex items-center justify-end gap-2">
                             <Button
                               variant="outline"
                               onClick={() => setNewComment("")}
-                              disabled={commentLoading}
+                              disabled={commentIsLoading}
                               size="sm"
                             >
                               Cancel
                             </Button>
                             <Button
                               onClick={handleCommentSubmit}
-                              disabled={commentLoading || !newComment.trim()}
+                              disabled={commentIsLoading || !newComment.trim()}
                               size="sm"
                             >
-                              {commentLoading ? (
+                              {commentIsLoading ? (
                                 <>
                                   <Loader2 className="size-4 animate-spin mr-2" />
                                   Posting...
@@ -748,7 +709,7 @@ export default function DashboardWatchVideo() {
                             <div key={comment.id} className="space-y-3">
                               <div className="flex items-start gap-3">
                                 <Avatar>
-                                  <AvatarImage src={comment.userAvatar} />
+                                  <AvatarImage src={comment.user.avatar} />
                                   <AvatarFallback>
                                     <User className="size-4 text-muted-foreground" />
                                   </AvatarFallback>
@@ -756,17 +717,17 @@ export default function DashboardWatchVideo() {
                                 <div className="flex-1 space-y-2">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-semibold text-sm">
-                                      @{comment.username}
+                                      @{comment.user.username}
                                     </span>
                                     <span className="text-xs text-muted-foreground">
                                       {formatTimeAgo(comment.createdAt)}
                                     </span>
                                   </div>
-                                  <p className="text-sm">{comment.content}</p>
+                                  <p className="text-sm">{comment.text}</p>
                                   <div className="flex items-center gap-2">
                                     <Button variant="ghost" size="sm" className="h-8 gap-1 px-2">
                                       <ThumbsUp className="size-3" />
-                                      <span className="text-xs">{comment.likes}</span>
+                                      <span className="text-xs">{comment.likes?.length || 0}</span>
                                     </Button>
                                     <Button variant="ghost" size="sm" className="h-8 px-2">
                                       <ThumbsDown className="size-3" />
@@ -860,7 +821,7 @@ export default function DashboardWatchVideo() {
                                 <Eye className="size-3" />
                                 <span>{formatViews(relatedVideo.views)}</span>
                                 <span>•</span>
-                                <span>{formatTimeAgo(relatedVideo.uploadedAt)}</span>
+                                <span>{formatTimeAgo(relatedVideo.createdAt)}</span>
                               </div>
                             </div>
                           </div>

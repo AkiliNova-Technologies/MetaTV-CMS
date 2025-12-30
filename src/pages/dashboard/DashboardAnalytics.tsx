@@ -328,7 +328,9 @@ export default function DashboardAnalytics() {
     const categories: Record<string, number> = {};
 
     videos.forEach((video) => {
-      const category = video.category || "Uncategorized";
+      const category = Array.isArray(video.category)
+        ? video.category[0] || "Uncategorized"
+        : video.category || "Uncategorized";
       categories[category] = (categories[category] || 0) + (video.views || 0);
     });
 

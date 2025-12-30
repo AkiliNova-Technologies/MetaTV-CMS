@@ -61,7 +61,13 @@ import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -168,16 +174,16 @@ function DraggableRow({ row }: { row: Row<Program> }) {
 }
 
 // Program Card Component
-function ProgramCard({ 
-  program, 
-  onEdit, 
-  onDelete 
-}: { 
+function ProgramCard({
+  program,
+  onEdit,
+  onDelete,
+}: {
   program: Program;
   onEdit: (program: Program) => void;
   onDelete: (programId: number) => void;
 }) {
-  const date = new Date(program.createdAt);
+  const date = program.createdAt ? new Date(program.createdAt) : new Date();
   const formatted = date.toLocaleString(undefined, {
     year: "numeric",
     month: "short",
@@ -204,9 +210,9 @@ function ProgramCard({
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 className="size-8 opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <IconDotsVertical className="size-4" />
@@ -218,7 +224,7 @@ function ProgramCard({
                 Edit
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 className="text-red-600 focus:text-red-600"
                 onClick={() => onDelete(program.id)}
               >
@@ -228,12 +234,12 @@ function ProgramCard({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        
+
         <p className="text-sm text-muted-foreground line-clamp-2 min-h-[40px]">
           {program.description || "No description provided"}
         </p>
       </CardHeader>
-      
+
       <CardContent className="pt-0">
         <Separator className="mb-4" />
         <div className="grid grid-cols-2 gap-3">
@@ -244,13 +250,15 @@ function ProgramCard({
             </div>
             <span className="text-2xl font-bold">{program.videos.length}</span>
           </div>
-          
+
           <div className="flex flex-col items-center p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
             <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
               <IconUsers className="size-4" />
               <span className="text-xs font-medium">Subscribers</span>
             </div>
-            <span className="text-2xl font-bold">{program.subscribers.length}</span>
+            <span className="text-2xl font-bold">
+              {program.subscribers.length}
+            </span>
           </div>
         </div>
       </CardContent>
@@ -258,7 +266,6 @@ function ProgramCard({
   );
 }
 
-// Delete Program Dialog
 function DeleteProgramDialog({
   program,
   onDelete,
@@ -308,8 +315,9 @@ function DeleteProgramDialog({
             Delete Program?
           </AlertDialogTitle>
           <AlertDialogDescription className="text-base pt-2">
-            Are you sure you want to delete <span className="font-semibold">{program.name}</span>? 
-            This action cannot be undone and will permanently remove:
+            Are you sure you want to delete{" "}
+            <span className="font-semibold">{program.name}</span>? This action
+            cannot be undone and will permanently remove:
             <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
               <li>{program.videos.length} associated videos</li>
               <li>{program.subscribers.length} subscriber connections</li>
@@ -342,7 +350,6 @@ function DeleteProgramDialog({
   );
 }
 
-// Add Program Sheet with improved design
 export function AddProgramDrawer({
   onAddProgram,
   showTrigger = true,
@@ -421,7 +428,10 @@ export function AddProgramDrawer({
           </div>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-[calc(100vh-180px)]">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="flex flex-col h-[calc(100vh-180px)]"
+        >
           <div className="flex-1 overflow-y-auto py-6 px-6 space-y-6">
             {/* Program Name */}
             <Card>
@@ -442,7 +452,9 @@ export function AddProgramDrawer({
                   <Input
                     id="name"
                     placeholder="e.g., Morning Show, News Hour, Tech Reviews"
-                    {...register("name", { required: "Program name is required" })}
+                    {...register("name", {
+                      required: "Program name is required",
+                    })}
                     className="text-base"
                   />
                   {errors.name && (
@@ -497,18 +509,18 @@ export function AddProgramDrawer({
                       {formValues.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-semibold text-base">{formValues.name}</h3>
+                      <h3 className="font-semibold text-base">
+                        {formValues.name}
+                      </h3>
                       <p className="text-sm text-muted-foreground mt-1">
                         {formValues.description || "No description"}
                       </p>
                       <div className="flex items-center gap-3 mt-3">
                         <Badge variant="secondary" className="text-xs">
-                          <IconVideo className="size-3 mr-1" />
-                          0 Videos
+                          <IconVideo className="size-3 mr-1" />0 Videos
                         </Badge>
                         <Badge variant="secondary" className="text-xs">
-                          <IconUsers className="size-3 mr-1" />
-                          0 Subscribers
+                          <IconUsers className="size-3 mr-1" />0 Subscribers
                         </Badge>
                       </div>
                     </div>
@@ -554,14 +566,15 @@ export function AddProgramDrawer({
   );
 }
 
-// Edit Program Sheet with improved design
 function EditProgramSheet({
   program,
   onUpdateProgram,
   trigger,
 }: {
   program: Program;
-  onUpdateProgram: (program: z.infer<typeof programSchema> & { id: number }) => void;
+  onUpdateProgram: (
+    program: z.infer<typeof programSchema> & { id: number }
+  ) => void;
   trigger?: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -610,12 +623,15 @@ function EditProgramSheet({
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
         {trigger || (
-          <Button variant="link" className="text-foreground px-0 h-auto font-normal">
+          <Button
+            variant="link"
+            className="text-foreground px-0 h-auto font-normal"
+          >
             {program.name}
           </Button>
         )}
       </SheetTrigger>
-      
+
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto" side="right">
         <SheetHeader className="space-y-3 pb-6 border-b">
           <div className="flex items-center gap-3">
@@ -631,7 +647,10 @@ function EditProgramSheet({
           </div>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-[calc(100vh-180px)]">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="flex flex-col h-[calc(100vh-180px)]"
+        >
           <div className="flex-1 overflow-y-auto py-6 px-6 space-y-6">
             {/* Program Statistics */}
             <Card className="border-2">
@@ -645,15 +664,19 @@ function EditProgramSheet({
                       <IconVideo className="size-4" />
                       <span className="text-xs font-medium">Videos</span>
                     </div>
-                    <span className="text-3xl font-bold">{program.videos.length}</span>
+                    <span className="text-3xl font-bold">
+                      {program.videos.length}
+                    </span>
                   </div>
-                  
+
                   <div className="flex flex-col items-center p-4 rounded-lg bg-muted">
                     <div className="flex items-center gap-2 text-muted-foreground mb-2">
                       <IconUsers className="size-4" />
                       <span className="text-xs font-medium">Subscribers</span>
                     </div>
-                    <span className="text-3xl font-bold">{program.subscribers.length}</span>
+                    <span className="text-3xl font-bold">
+                      {program.subscribers.length}
+                    </span>
                   </div>
                 </div>
               </CardContent>
@@ -674,7 +697,9 @@ function EditProgramSheet({
                   </Label>
                   <Input
                     id="edit-name"
-                    {...register("name", { required: "Program name is required" })}
+                    {...register("name", {
+                      required: "Program name is required",
+                    })}
                     className="text-base"
                   />
                   {errors.name && (
@@ -693,7 +718,10 @@ function EditProgramSheet({
                 <Separator />
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-description" className="text-sm font-medium">
+                  <Label
+                    htmlFor="edit-description"
+                    className="text-sm font-medium"
+                  >
                     Description
                   </Label>
                   <Textarea
@@ -757,7 +785,6 @@ function EditProgramSheet({
   );
 }
 
-// Main ProgramTable Component
 export function ProgramTable({ programs }: { programs: Program[] }) {
   const {
     programs: programData,
@@ -767,14 +794,19 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
   const [data, setData] = React.useState<Program[]>(programs);
   const [viewMode, setViewMode] = React.useState<"table" | "card">("table");
   const [rowSelection, setRowSelection] = React.useState({});
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] =
+    React.useState<VisibilityState>({});
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
+    []
+  );
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
   });
-  const [editingProgram, setEditingProgram] = React.useState<Program | null>(null);
+  const [editingProgram, setEditingProgram] = React.useState<Program | null>(
+    null
+  );
 
   const sortableId = React.useId();
   const sensors = useSensors(
@@ -904,7 +936,10 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
         accessorKey: "createdAt",
         header: "Created At",
         cell: ({ row }) => {
-          const date = new Date(row.original.createdAt);
+          // Handle potential undefined createdAt
+          const date = row.original.createdAt
+            ? new Date(row.original.createdAt)
+            : new Date();
           const formatted = date.toLocaleString(undefined, {
             year: "numeric",
             month: "short",
@@ -1212,7 +1247,10 @@ export function ProgramTable({ programs }: { programs: Program[] }) {
               <p className="text-muted-foreground mb-4">
                 Create your first program to get started
               </p>
-              <AddProgramDrawer onAddProgram={handleAddProgram} showTrigger={true} />
+              <AddProgramDrawer
+                onAddProgram={handleAddProgram}
+                showTrigger={true}
+              />
             </div>
           )}
         </TabsContent>

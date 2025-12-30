@@ -3,7 +3,6 @@ import { useReduxVideos } from "@/hooks/useReduxVideos";
 import { VideoTable } from "@/components/video-table";
 import { VideoSectionCards } from "@/components/video-section-cards";
 import type { CardData } from "@/components/video-section-cards";
-// import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function DashboardVideos() {
   const { videos } = useReduxVideos();
@@ -12,16 +11,16 @@ export default function DashboardVideos() {
     value: string | number;
   } | null>(null);
 
-  // Ensure all required fields are present for VideoSectionCards and VideoTable
+  // Transform videos to match expected format
   const fullVideos = React.useMemo(() => {
     if (!Array.isArray(videos)) return [];
+
     return videos.map((v) => ({
       ...v,
       allowComments: v.allowComments ?? true,
       codec: v.codec ?? "",
-      isFeatured: v.isFeatured ?? false,
-      monetization: v.monetization ?? "",
       uploadedById: v.uploadedById ?? 0,
+      programId: v.programId ?? undefined,
     }));
   }, [videos]);
 
