@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useReduxAuth } from "@/hooks/useReduxAuth";
@@ -18,26 +18,53 @@ export function LoginForm({
   const [password, setPassword] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
 
-  const { signin } = useReduxAuth();
+  const { signin, isAuthenticated } = useReduxAuth();
   const { reload } = useReduxUsers();
 
   const navigate = useNavigate();
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (!email || !password) {
+      toast.error("Please enter both email and password");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await signin(email, password);
+      const loginSuccessful = await signin(email, password);
+
+      if (!loginSuccessful) {
+        toast.error("Invalid email or password");
+        setPassword("");
+        setLoading(false);
+        return;
+      }
+
       await reload();
       navigate("/dashboard");
       toast.success("Welcome Back");
-    } catch {
-      toast.error("Something went wrong.");
+    } catch (error: any) {
+      toast.error(error?.message || "Something went wrong. Please try again.");
+      setPassword("");
     } finally {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/dashboard");
+    }
+  }, [isAuthenticated, navigate]);
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -90,7 +117,7 @@ export function LoginForm({
                   "Login"
                 )}
               </Button>
-              
+
               {/* <div className="text-center text-sm">
                 Don&apos;t have an account?{" "}
                 <a href="#" className="underline underline-offset-4">

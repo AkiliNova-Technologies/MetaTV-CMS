@@ -30,9 +30,13 @@ export function useReduxAuth() {
    * Sign in user
    */
   const signin = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string): Promise<boolean> => {
       const result = await dispatch(login({ email, password }));
-      return result;
+
+      if (login.fulfilled.match(result)) {
+        return true;
+      }
+      return false;
     },
     [dispatch]
   );
