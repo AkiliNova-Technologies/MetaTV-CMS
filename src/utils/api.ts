@@ -1,7 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
 // const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1/";
-const API_BASE_URL = "http://backend.apptv-cms.com/api/v1/";
+const API_BASE_URL = "https://backend.apptv-cms.com/api/v1/";
 
 // Create axios instance
 const api = axios.create({
