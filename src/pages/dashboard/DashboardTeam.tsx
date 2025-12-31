@@ -13,7 +13,7 @@ export default function DashboardTeam() {
     if (!Array.isArray(users)) return [];
 
     return users
-      .filter((user) => user.role !== "SUPER_ADMIN")
+      .filter((user) => user.role !== "SUPER_ADMIN" && user.role !== "USER")
       .map((user) => ({
         id: user.id,
         firstName: user.firstName,

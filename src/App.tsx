@@ -18,6 +18,7 @@ import { Toaster } from "./components/ui/sonner";
 import DashboardQuickCreate from "./pages/dashboard/DashboardQuickCreate";
 import DashboardSettings from "./pages/dashboard/DashboardSettings";
 import DashboardAccount from "./pages/dashboard/DashboardAccount";
+import DashboardAudience from "./pages/dashboard/DashboardAudience";
 
 function App() {
   
@@ -42,6 +43,7 @@ function App() {
             </Route>
             <Route path="music" element={<DashboardMusic />} />
             <Route path="team" element={<DashboardTeam />} />
+            <Route path="audience" element={<DashboardAudience />} />
             <Route path="programs" element={<DashboardPrograms />} />
             <Route path="settings" element={<DashboardSettings />} />
             <Route path="my-profile" element={<DashboardAccount />} />

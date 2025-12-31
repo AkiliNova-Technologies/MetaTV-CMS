@@ -10,6 +10,7 @@ import {
   IconMessage,
   IconMusic,
   IconSettings,
+  IconUser,
   IconUsers,
 } from "@tabler/icons-react";
 
@@ -57,6 +58,11 @@ const data = {
       title: "Team",
       url: "/dashboard/team",
       icon: IconUsers, // Users for team
+    },
+    {
+      title: "Audience",
+      url: "/dashboard/audience",
+      icon: IconUser, // User for Audience
     },
     {
       title: "Programs",
