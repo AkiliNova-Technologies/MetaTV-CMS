@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   closestCenter,
   DndContext,
@@ -116,14 +116,14 @@ import {
   Video,
   ImageIcon,
   Tag,
-  Upload,
-
-  Image,
   Tv,
   Trash2,
   Hash,
   Share2,
   Radio,
+  CheckCircle2,
+  UploadIcon,
+  AlertCircle,
 } from "lucide-react";
 import { livestreamSchema } from "@/constants/Schemas";
 import { useReduxLiveStreams } from "@/hooks/useReduxLiveStreams";
@@ -148,6 +148,10 @@ import {
 import { useReduxPrograms } from "@/hooks/useReduxPrograms";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { STORAGE_BUCKETS, storageUtils, supabase } from "@/config/supabase";
+import { message } from "antd";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Progress } from "./ui/progress";
 
 export const LiveStreamCategory = {
   NEWS: "NEWS",
@@ -271,8 +275,6 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof livestreamSchema>> }) {
   );
 }
 
-// Part 3: Enhanced Livestream Drawer Component
-
 interface LivestreamDrawerProps {
   onSave: (livestream: z.infer<typeof livestreamSchema>) => void;
   livestream?: z.infer<typeof livestreamSchema> | null;
@@ -288,10 +290,19 @@ export function LivestreamDrawer({
   showTrigger = true,
 }: LivestreamDrawerProps & { showTrigger?: boolean }) {
   const { programs, loading } = useReduxPrograms();
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [isSaving, setIsSaving] = React.useState(false);
-  const [dragOver, setDragOver] = React.useState(false);
-  const [formData, setFormData] = React.useState({
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [dragOver, setDragOver] = useState({ thumbnail: false });
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(
+    editingLivestream?.thumbnailUrl || null
+  );
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
+
+  const [formData, setFormData] = useState({
     title: editingLivestream?.title || "",
     description: editingLivestream?.description || "",
     status: editingLivestream?.status || "PREPARING",
@@ -307,24 +318,20 @@ export function LivestreamDrawer({
     thumbnailUrl: editingLivestream?.thumbnailUrl || "",
   });
 
-  const [newTag, setNewTag] = React.useState("");
-  const [thumbnailFile, setThumbnailFile] = React.useState<File | null>(null);
-  const [thumbnailPreview, setThumbnailPreview] = React.useState<string | null>(
-    editingLivestream?.thumbnailUrl || null
-  );
-  const thumbnailInputRef = React.useRef<HTMLInputElement>(null);
+  const [newTag, setNewTag] = useState("");
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
 
   const handleInputChange = (field: string, value: unknown) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open !== undefined) {
       setIsOpen(open);
     }
   }, [open]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (editingLivestream) {
       setFormData({
         title: editingLivestream.title || "",
@@ -343,38 +350,122 @@ export function LivestreamDrawer({
       });
       setThumbnailFile(null);
       setThumbnailPreview(editingLivestream.thumbnailUrl || null);
+      setUploadError(null);
     }
   }, [editingLivestream]);
 
+  // File handling functions
   const handleFileChange = (file: File | null) => {
-    setThumbnailFile(file);
+    setUploadError(null);
+
     if (file) {
+      // Validate file
+      const validation = storageUtils.validateFile(file, 'THUMBNAILS');
+
+      if (!validation.valid) {
+        message.error(validation.error || "Invalid file upload");
+        setUploadError(validation.error || "Invalid file upload");
+        return;
+      }
+
+      // Create preview
       const previewUrl = URL.createObjectURL(file);
       setThumbnailPreview(previewUrl);
+      setThumbnailFile(file);
     } else {
-      setThumbnailPreview(editingLivestream?.thumbnailUrl || null);
+      if (thumbnailPreview && thumbnailPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(thumbnailPreview);
+      }
+      setThumbnailPreview(null);
+      setThumbnailFile(null);
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent, type: "thumbnail") => {
     e.preventDefault();
-    setDragOver(false);
+    setDragOver((prev) => ({ ...prev, [type]: false }));
 
-    const files = Array.from(e.dataTransfer.files);
-    const file = files[0];
-
-    if (file?.type.startsWith("image/")) {
-      handleFileChange(file);
+    const files = e.dataTransfer.files;
+    if (files && files[0]) {
+      handleFileChange(files[0]);
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent, type: "thumbnail") => {
     e.preventDefault();
-    setDragOver(true);
+    setDragOver((prev) => ({ ...prev, [type]: true }));
   };
 
-  const handleDragLeave = () => {
-    setDragOver(false);
+  const handleDragLeave = (type: "thumbnail") => {
+    setDragOver((prev) => ({ ...prev, [type]: false }));
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
+  };
+
+  // Upload thumbnail to Supabase
+  const uploadThumbnailToSupabase = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      setUploadingThumbnail(true);
+      setUploadProgress(0);
+      setUploadError(null);
+
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}-${Math.random()
+        .toString(36)
+        .substring(7)}.${fileExt}`;
+
+      // Simulate upload progress (Supabase doesn't provide progress events)
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+
+      // Upload file to Supabase
+      supabase.storage
+        .from(STORAGE_BUCKETS.THUMBNAILS)
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: false,
+        })
+        .then(({ error }) => {
+          clearInterval(progressInterval);
+
+          if (error) {
+            setUploadError(`Failed to upload thumbnail: ${error.message}`);
+            reject(new Error(`Failed to upload thumbnail: ${error.message}`));
+            return;
+          }
+
+          setUploadProgress(100);
+
+          // Get public URL
+          const { data: urlData } = supabase.storage
+            .from(STORAGE_BUCKETS.THUMBNAILS)
+            .getPublicUrl(fileName);
+
+          setTimeout(() => {
+            setUploadingThumbnail(false);
+            resolve(urlData.publicUrl);
+          }, 500);
+        })
+        .catch((error) => {
+          clearInterval(progressInterval);
+          setUploadError(`Upload failed: ${error.message}`);
+          setUploadingThumbnail(false);
+          reject(error);
+        });
+    });
   };
 
   const addTag = () => {
@@ -404,41 +495,44 @@ export function LivestreamDrawer({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+    setUploadError(null);
 
     try {
-      const submissionFormData = new FormData();
+      let thumbnailUrl = formData.thumbnailUrl;
 
-      Object.entries(formData).forEach(([key, value]) => {
-        if (key === "tags" && Array.isArray(value)) {
-          submissionFormData.append(key, JSON.stringify(value));
-        } else if (key === "programId" && value === "") {
-          // Skip empty programId
-        } else if (value !== null && value !== undefined && value !== "") {
-          submissionFormData.append(key, value.toString());
-        }
-      });
-
-      if (formData.scheduledAt) {
-        submissionFormData.append(
-          "scheduledAt",
-          new Date(formData.scheduledAt).toISOString()
-        );
-      }
-
+      // Upload thumbnail if a new file was selected
       if (thumbnailFile) {
-        submissionFormData.append("livestreamThumbnail", thumbnailFile);
+        try {
+          thumbnailUrl = await uploadThumbnailToSupabase(thumbnailFile);
+          toast.success("Thumbnail uploaded successfully!");
+        } catch (error) {
+          toast.error("Failed to upload thumbnail. Please try again.");
+          setIsSaving(false);
+          return;
+        }
       }
+
+      // Prepare data for API
+      const submissionData = {
+        ...formData,
+        thumbnailUrl,
+        programId: formData.programId ? parseInt(formData.programId) : null,
+        scheduledAt: formData.scheduledAt
+          ? new Date(formData.scheduledAt).toISOString()
+          : new Date().toISOString(),
+        tags: formData.tags,
+      };
 
       let response;
 
       if (editingLivestream) {
         response = await api.put(
           `/livestreams/${editingLivestream.id}`,
-          submissionFormData
+          submissionData
         );
         toast.success("Livestream updated successfully");
       } else {
-        response = await api.post("/livestreams", submissionFormData);
+        response = await api.post("/livestreams", submissionData);
         toast.success("Livestream created successfully");
       }
 
@@ -454,6 +548,7 @@ export function LivestreamDrawer({
       toast.error("Operation failed. Please try again.");
     } finally {
       setIsSaving(false);
+      setUploadProgress(0);
     }
   };
 
@@ -472,10 +567,17 @@ export function LivestreamDrawer({
       thumbnailUrl: "",
     });
     setNewTag("");
+    if (thumbnailPreview && thumbnailPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(thumbnailPreview);
+    }
     setThumbnailFile(null);
     setThumbnailPreview(null);
-    setDragOver(false);
+    setDragOver({ thumbnail: false });
+    setUploadError(null);
+    setUploadProgress(0);
   };
+
+  const isUploading = uploadingThumbnail;
 
   return (
     <Sheet
@@ -497,7 +599,7 @@ export function LivestreamDrawer({
           </Button>
         </SheetTrigger>
       )}
-      
+
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto px-6">
         <SheetHeader className="space-y-3 px-0">
           <SheetTitle className="flex items-center gap-2 text-xl">
@@ -514,6 +616,28 @@ export function LivestreamDrawer({
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 mt-6">
+          {/* Upload Progress */}
+          {uploadingThumbnail && (
+            <Alert className="bg-primary/5 border-primary/20">
+              <UploadIcon className="h-4 w-4" />
+              <AlertDescription className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span>Uploading thumbnail...</span>
+                  <span className="text-sm font-medium">{uploadProgress}%</span>
+                </div>
+                <Progress value={uploadProgress} className="h-2" />
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Upload Error */}
+          {uploadError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{uploadError}</AlertDescription>
+            </Alert>
+          )}
+
           {/* Basic Information Card */}
           <Card>
             <CardHeader>
@@ -528,6 +652,7 @@ export function LivestreamDrawer({
                   onChange={(e) => handleInputChange("title", e.target.value)}
                   placeholder="Enter an engaging title for your stream"
                   required
+                  disabled={isUploading || isSaving}
                 />
               </div>
 
@@ -541,6 +666,7 @@ export function LivestreamDrawer({
                   }
                   placeholder="What will you be streaming about?"
                   rows={3}
+                  disabled={isUploading || isSaving}
                 />
               </div>
 
@@ -549,18 +675,43 @@ export function LivestreamDrawer({
                 <Label className="flex items-center gap-2">
                   <ImageIcon className="size-4" />
                   Stream Thumbnail
+                  {thumbnailFile && (
+                    <Badge variant="outline" className="ml-2">
+                      New
+                    </Badge>
+                  )}
                 </Label>
                 <div
-                  className={cn(
-                    "border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer",
-                    dragOver
-                      ? "border-primary bg-primary/10 scale-105"
-                      : "border-muted-foreground/25 hover:border-primary/50"
-                  )}
-                  onDrop={handleDrop}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onClick={() => thumbnailInputRef.current?.click()}
+                  className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300 cursor-pointer overflow-hidden
+                      ${
+                        dragOver.thumbnail
+                          ? "border-primary bg-primary/5 scale-105"
+                          : thumbnailFile
+                          ? "border-green-500 bg-green-500/5"
+                          : thumbnailPreview
+                          ? "border-blue-500 bg-blue-500/5"
+                          : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50"
+                      }
+                      ${
+                        isUploading || isSaving
+                          ? "opacity-50 cursor-not-allowed"
+                          : ""
+                      }
+                    `}
+                  onDrop={(e) =>
+                    !isUploading && !isSaving && handleDrop(e, "thumbnail")
+                  }
+                  onDragOver={(e) =>
+                    !isUploading && !isSaving && handleDragOver(e, "thumbnail")
+                  }
+                  onDragLeave={() =>
+                    !isUploading && !isSaving && handleDragLeave("thumbnail")
+                  }
+                  onClick={() =>
+                    !isUploading &&
+                    !isSaving &&
+                    thumbnailInputRef.current?.click()
+                  }
                 >
                   <input
                     ref={thumbnailInputRef}
@@ -568,53 +719,91 @@ export function LivestreamDrawer({
                     accept="image/*"
                     className="hidden"
                     onChange={(e) =>
+                      !isUploading &&
+                      !isSaving &&
                       handleFileChange(e.target.files?.[0] || null)
                     }
+                    disabled={isUploading || isSaving}
                   />
-                  {thumbnailPreview ? (
-                    <div className="relative w-full aspect-video rounded-lg overflow-hidden mb-3">
+
+                  {isUploading ? (
+                    <div className="space-y-4">
+                      <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <IconLoader className="size-8 text-primary animate-spin" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium mb-1">Uploading...</p>
+                        <p className="text-xs text-muted-foreground">
+                          {uploadProgress}% complete
+                        </p>
+                      </div>
+                    </div>
+                  ) : !thumbnailPreview ? (
+                    <div className="space-y-4">
+                      <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <ImageIcon className="size-8 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium mb-1">
+                          Click to upload or drag and drop
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          JPG or PNG (16:9 ratio recommended)
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="mx-auto w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
+                        <CheckCircle2 className="size-8 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-green-600 mb-1">
+                          {thumbnailFile ? "Thumbnail ready" : "Thumbnail set"}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate max-w-xs mx-auto">
+                          {thumbnailFile
+                            ? thumbnailFile.name
+                            : "Current thumbnail"}
+                        </p>
+                        {thumbnailFile && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {formatFileSize(thumbnailFile.size)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {thumbnailPreview && (
+                  <div className="space-y-2">
+                    <div className="relative">
                       <img
                         src={thumbnailPreview}
                         alt="Thumbnail preview"
-                        className="w-full h-full object-cover"
+                        className="w-full rounded-lg border object-cover object-top aspect-video"
                       />
-                    </div>
-                  ) : (
-                    <Upload className="mx-auto size-12 mb-3 text-muted-foreground" />
-                  )}
-                  <p className="font-medium mb-1">
-                    {thumbnailPreview ? "Change thumbnail" : "Drop thumbnail here"}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    or click to browse
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    JPG, PNG, WebP (16:9 ratio recommended)
-                  </p>
-                </div>
-
-                {thumbnailFile && (
-                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                    <Image className="size-5 text-primary flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate text-sm">
-                        {thumbnailFile.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {(thumbnailFile.size / 1024).toFixed(2)} KB
-                      </p>
+                      {thumbnailFile && (
+                        <div className="absolute top-2 right-2">
+                          <Badge variant="default" className="bg-green-600">
+                            New
+                          </Badge>
+                        </div>
+                      )}
                     </div>
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      type="button"
+                      variant="outline"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleFileChange(null);
                       }}
-                      className="hover:bg-destructive hover:text-destructive-foreground"
+                      disabled={isUploading || isSaving}
+                      className="w-full"
                     >
-                      <Trash2 className="size-4" />
+                      <IconX className="mr-2 size-4" />
+                      {thumbnailFile ? "Remove Thumbnail" : "Clear Thumbnail"}
                     </Button>
                   </div>
                 )}
@@ -635,9 +824,10 @@ export function LivestreamDrawer({
                 <Label htmlFor="status">Stream Status</Label>
                 <Select
                   value={formData.status}
-                  onValueChange={(value: "LIVE" | "SCHEDULED" | "ENDED" | "PREPARING") =>
-                    handleInputChange("status", value)
-                  }
+                  onValueChange={(
+                    value: "LIVE" | "SCHEDULED" | "ENDED" | "PREPARING"
+                  ) => handleInputChange("status", value)}
+                  disabled={isUploading || isSaving}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -681,6 +871,7 @@ export function LivestreamDrawer({
                     handleInputChange("scheduledAt", e.target.value)
                   }
                   required
+                  disabled={isUploading || isSaving}
                 />
               </div>
             </CardContent>
@@ -700,6 +891,7 @@ export function LivestreamDrawer({
                 <Select
                   value={formData.quality}
                   onValueChange={(value) => handleInputChange("quality", value)}
+                  disabled={isUploading || isSaving}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -717,7 +909,10 @@ export function LivestreamDrawer({
                 <div className="flex items-center gap-2">
                   <Video className="size-4 text-muted-foreground" />
                   <div>
-                    <Label htmlFor="isRecording" className="cursor-pointer font-medium">
+                    <Label
+                      htmlFor="isRecording"
+                      className="cursor-pointer font-medium"
+                    >
                       Record Stream
                     </Label>
                     <p className="text-xs text-muted-foreground">
@@ -731,6 +926,7 @@ export function LivestreamDrawer({
                   onCheckedChange={(checked) =>
                     handleInputChange("isRecording", checked)
                   }
+                  disabled={isUploading || isSaving}
                 />
               </div>
             </CardContent>
@@ -752,6 +948,7 @@ export function LivestreamDrawer({
                   onValueChange={(value: "PUBLIC" | "PRIVATE" | "UNLISTED") =>
                     handleInputChange("visibility", value)
                   }
+                  disabled={isUploading || isSaving}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -786,6 +983,7 @@ export function LivestreamDrawer({
                   onValueChange={(value) =>
                     handleInputChange("category", value)
                   }
+                  disabled={isUploading || isSaving}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a category" />
@@ -805,13 +1003,19 @@ export function LivestreamDrawer({
                 <Select
                   value={formData.programId}
                   onValueChange={(value) =>
-                    handleInputChange("programId", value === "none" ? "" : value)
+                    handleInputChange(
+                      "programId",
+                      value === "none" ? "" : value
+                    )
                   }
+                  disabled={isUploading || isSaving}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue
                       placeholder={
-                        loading ? "Loading programs..." : "Select a program (optional)"
+                        loading
+                          ? "Loading programs..."
+                          : "Select a program (optional)"
                       }
                     />
                   </SelectTrigger>
@@ -845,8 +1049,14 @@ export function LivestreamDrawer({
                     onChange={(e) => setNewTag(e.target.value)}
                     onKeyPress={handleTagKeyPress}
                     placeholder="Add a tag (press Enter)"
+                    disabled={isUploading || isSaving}
                   />
-                  <Button type="button" onClick={addTag} variant="outline">
+                  <Button
+                    type="button"
+                    onClick={addTag}
+                    variant="outline"
+                    disabled={isUploading || isSaving}
+                  >
                     Add
                   </Button>
                 </div>
@@ -865,6 +1075,7 @@ export function LivestreamDrawer({
                           size="icon"
                           className="size-4 hover:bg-destructive hover:text-destructive-foreground ml-1"
                           onClick={() => removeTag(tag)}
+                          disabled={isUploading || isSaving}
                         >
                           <IconX className="size-3" />
                         </Button>
@@ -877,25 +1088,34 @@ export function LivestreamDrawer({
           </Card>
 
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t">
+          <div className="flex gap-3 py-4 border-t">
             <Button
               type="button"
               variant="outline"
               className="flex-1"
               onClick={() => setIsOpen(false)}
-              disabled={isSaving}
+              disabled={isSaving || isUploading}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               className="flex-1"
-              disabled={!formData.title || !formData.scheduledAt || isSaving}
+              disabled={
+                !formData.title ||
+                !formData.scheduledAt ||
+                isSaving ||
+                isUploading
+              }
             >
-              {isSaving ? (
+              {isSaving || isUploading ? (
                 <>
                   <IconLoader className="mr-2 size-4 animate-spin" />
-                  {editingLivestream ? "Updating..." : "Creating..."}
+                  {isUploading
+                    ? "Uploading..."
+                    : editingLivestream
+                    ? "Updating..."
+                    : "Creating..."}
                 </>
               ) : (
                 <>
@@ -910,8 +1130,6 @@ export function LivestreamDrawer({
     </Sheet>
   );
 }
-
-  
 
 function LivestreamCard({
   livestream,
@@ -948,7 +1166,7 @@ function LivestreamCard({
   };
 
   return (
-    <Card className="group relative overflow-hidden bg-gradient-to-br from-card to-card/50 hover:shadow-2xl hover:border-primary/30 transition-all duration-500 hover:-translate-y-1">
+    <Card className="group pt-0 relative overflow-hidden bg-gradient-to-br from-card to-card/50 transition-all duration-500">
       {/* Thumbnail Section with Enhanced Overlay */}
       <div className="relative aspect-video bg-gradient-to-br from-red-500/5 via-muted to-orange-500/5 overflow-hidden cursor-pointer">
         {/* Image Loading/Error States */}
@@ -998,7 +1216,7 @@ function LivestreamCard({
 
         {/* Play Button Overlay (for LIVE streams) */}
         {livestream.status === "LIVE" && (
-          <div 
+          <div
             className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300"
             onClick={handleJoinStream}
           >
@@ -1037,7 +1255,10 @@ function LivestreamCard({
         )}
 
         {/* Quality Badge (Top Right) */}
-        <Badge variant="secondary" className="absolute top-3 right-3 bg-white/90 dark:bg-black/80 backdrop-blur-sm border-0 font-medium">
+        <Badge
+          variant="secondary"
+          className="absolute top-3 right-3 bg-white/90 dark:bg-black/80 backdrop-blur-sm border-0 font-medium"
+        >
           {livestream.quality}
         </Badge>
 
@@ -1105,7 +1326,11 @@ function LivestreamCard({
           {/* Actions Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-8 hover:bg-primary/10">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 hover:bg-primary/10"
+              >
                 <MoreVertical className="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -1129,7 +1354,10 @@ function LivestreamCard({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {livestream.status !== "LIVE" && (
-                <DeleteLivestreamDialog livestream={livestream} onDelete={() => {}} />
+                <DeleteLivestreamDialog
+                  livestream={livestream}
+                  onDelete={() => {}}
+                />
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1141,11 +1369,12 @@ function LivestreamCard({
         <div className="flex items-center justify-between text-xs border-t pt-3">
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Recording:</span>
-            <Badge 
-              variant={livestream.isRecording ? "default" : "outline"} 
+            <Badge
+              variant={livestream.isRecording ? "default" : "outline"}
               className={cn(
                 "text-xs px-2 py-0 gap-1",
-                livestream.isRecording && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"
+                livestream.isRecording &&
+                  "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"
               )}
             >
               {livestream.isRecording ? (
@@ -1170,7 +1399,9 @@ function LivestreamCard({
         {(livestream.peakViewers ?? 0) > 0 && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Users className="size-3" />
-            <span>Peak: {formatViews(livestream.peakViewers ?? 0)} viewers</span>
+            <span>
+              Peak: {formatViews(livestream.peakViewers ?? 0)} viewers
+            </span>
           </div>
         )}
 
@@ -1187,16 +1418,16 @@ function LivestreamCard({
               </Badge>
             ))}
             {livestream.tags.length > 3 && (
-              <Badge variant="outline" className="text-xs px-2 py-0 text-muted-foreground">
+              <Badge
+                variant="outline"
+                className="text-xs px-2 py-0 text-muted-foreground"
+              >
                 +{livestream.tags.length - 3}
               </Badge>
             )}
           </div>
         )}
       </CardContent>
-
-      {/* Hover Accent Line */}
-      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-red-500/50 to-red-500 scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left" />
     </Card>
   );
 }
@@ -1318,8 +1549,6 @@ function DeleteLivestreamDialog({
   );
 }
 
-// Part 4: Main LiveStream Table Component
-
 export function LiveStreamTable({
   livestreams,
 }: {
@@ -1331,14 +1560,20 @@ export function LiveStreamTable({
     reload: livestreamsReload,
     loading,
   } = useReduxLiveStreams();
-  
-  const [data, setData] = React.useState<z.infer<typeof livestreamSchema>[]>(livestreams);
-  const [editingLivestream, setEditingLivestream] = React.useState<z.infer<typeof livestreamSchema> | null>(null);
+
+  const [data, setData] =
+    React.useState<z.infer<typeof livestreamSchema>[]>(livestreams);
+  const [editingLivestream, setEditingLivestream] = React.useState<z.infer<
+    typeof livestreamSchema
+  > | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<"table" | "card">("card");
   const [rowSelection, setRowSelection] = React.useState({});
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] =
+    React.useState<VisibilityState>({});
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
+    []
+  );
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [pagination, setPagination] = React.useState({
@@ -1368,11 +1603,15 @@ export function LiveStreamTable({
     [livestreams]
   );
 
-  const handleCreateLivestream = (livestream: z.infer<typeof livestreamSchema>) => {
+  const handleCreateLivestream = (
+    livestream: z.infer<typeof livestreamSchema>
+  ) => {
     setData((prev) => [...prev, livestream]);
   };
 
-  const handleUpdateLivestream = (updatedLivestream: z.infer<typeof livestreamSchema>) => {
+  const handleUpdateLivestream = (
+    updatedLivestream: z.infer<typeof livestreamSchema>
+  ) => {
     setData((prev) =>
       prev.map((stream) =>
         stream.id === updatedLivestream.id ? updatedLivestream : stream
@@ -1381,7 +1620,9 @@ export function LiveStreamTable({
   };
 
   const handleDeleteLivestream = React.useCallback((livestreamId: number) => {
-    setData((prev) => prev.filter((livestream) => livestream.id !== livestreamId));
+    setData((prev) =>
+      prev.filter((livestream) => livestream.id !== livestreamId)
+    );
   }, []);
 
   const filteredData = React.useMemo(() => {
@@ -1447,7 +1688,9 @@ export function LiveStreamTable({
         cell: ({ row }) => (
           <div className="flex items-center gap-1.5">
             <Users className="size-3.5 text-muted-foreground" />
-            <span className="font-medium">{formatViews(row.original.currentViewers)}</span>
+            <span className="font-medium">
+              {formatViews(row.original.currentViewers)}
+            </span>
           </div>
         ),
       },
@@ -1525,7 +1768,9 @@ export function LiveStreamTable({
                 <>
                   <DropdownMenuItem
                     onClick={() =>
-                      navigate(`/dashboard/livestreams/watch/${row.original.id}`)
+                      navigate(
+                        `/dashboard/livestreams/watch/${row.original.id}`
+                      )
                     }
                   >
                     <Play className="size-4 mr-2" />
@@ -1644,13 +1889,19 @@ export function LiveStreamTable({
               <DropdownMenuContent align="end" className="w-56">
                 {table
                   .getAllColumns()
-                  .filter((column) => typeof column.accessorFn !== "undefined" && column.getCanHide())
+                  .filter(
+                    (column) =>
+                      typeof column.accessorFn !== "undefined" &&
+                      column.getCanHide()
+                  )
                   .map((column) => (
                     <DropdownMenuCheckboxItem
                       key={column.id}
                       className="capitalize"
                       checked={column.getIsVisible()}
-                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                      onCheckedChange={(value) =>
+                        column.toggleVisibility(!!value)
+                      }
                     >
                       {column.id}
                     </DropdownMenuCheckboxItem>
@@ -1701,7 +1952,10 @@ export function LiveStreamTable({
       </div>
 
       {/* Table View */}
-      <TabsContent value="table" className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6">
+      <TabsContent
+        value="table"
+        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
+      >
         <div className="overflow-hidden rounded-lg border">
           <DndContext
             collisionDetection={closestCenter}
@@ -1718,7 +1972,10 @@ export function LiveStreamTable({
                       <TableHead key={header.id} colSpan={header.colSpan}>
                         {header.isPlaceholder
                           ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -1727,28 +1984,43 @@ export function LiveStreamTable({
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={columns.length} className="h-32 text-center">
+                    <TableCell
+                      colSpan={columns.length}
+                      className="h-32 text-center"
+                    >
                       <div className="flex flex-col items-center gap-3">
                         <IconLoader className="size-8 animate-spin text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">Loading livestreams...</p>
+                        <p className="text-sm text-muted-foreground">
+                          Loading livestreams...
+                        </p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : table.getRowModel().rows?.length ? (
-                  <SortableContext items={dataIds} strategy={verticalListSortingStrategy}>
+                  <SortableContext
+                    items={dataIds}
+                    strategy={verticalListSortingStrategy}
+                  >
                     {table.getRowModel().rows.map((row) => (
                       <DraggableRow key={row.id} row={row} />
                     ))}
                   </SortableContext>
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={columns.length} className="h-32 text-center">
+                    <TableCell
+                      colSpan={columns.length}
+                      className="h-32 text-center"
+                    >
                       <div className="flex flex-col items-center gap-3">
                         <Radio className="size-12 text-muted-foreground opacity-50" />
                         <div>
-                          <p className="font-semibold mb-1">No livestreams found</p>
+                          <p className="font-semibold mb-1">
+                            No livestreams found
+                          </p>
                           <p className="text-sm text-muted-foreground">
-                            {globalFilter ? "Try adjusting your search" : "Create your first livestream to get started"}
+                            {globalFilter
+                              ? "Try adjusting your search"
+                              : "Create your first livestream to get started"}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1757,7 +2029,10 @@ export function LiveStreamTable({
                               Clear search
                             </Button>
                           )}
-                          <Button variant="ghost" onClick={() => livestreamsReload()}>
+                          <Button
+                            variant="ghost"
+                            onClick={() => livestreamsReload()}
+                          >
                             <IconRefresh className="size-4 mr-2" />
                             Retry
                           </Button>
@@ -1848,7 +2123,9 @@ export function LiveStreamTable({
         {loading ? (
           <div className="flex flex-col items-center justify-center h-64 gap-3">
             <IconLoader className="size-12 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Loading livestreams...</p>
+            <p className="text-sm text-muted-foreground">
+              Loading livestreams...
+            </p>
           </div>
         ) : filteredData.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -1860,7 +2137,10 @@ export function LiveStreamTable({
                   description: livestream.description ?? "",
                   scheduledAt: livestream.scheduledAt ?? "",
                   startedAt: livestream.startedAt ?? undefined,
-                  endedAt: livestream.endedAt === null ? undefined : livestream.endedAt,
+                  endedAt:
+                    livestream.endedAt === null
+                      ? undefined
+                      : livestream.endedAt,
                   thumbnailUrl: livestream.thumbnailUrl ?? undefined,
                 }}
                 onEdit={(livestream) => {
