@@ -160,6 +160,7 @@ export default function DashboardEditVideo() {
       } catch (error) {
         console.error("Failed to fetch video:", error);
         setError("Failed to load video data");
+        toast.error("Failed to load video data");
       } finally {
         setFetching(false);
       }
@@ -182,44 +183,65 @@ export default function DashboardEditVideo() {
 
   const handleDrop = (e: React.DragEvent, type: "thumbnail" | "video") => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOver((prev) => ({ ...prev, [type]: false }));
 
+    console.log(`[DROP] File dropped for ${type}`);
+    
     const files = e.dataTransfer.files;
     if (files && files[0]) {
-      if (type === "thumbnail") {
-        handleFileChange("thumbnail", files[0]);
-      } else if (type === "video") {
-        handleFileChange("video", files[0]);
-      }
+      console.log(`[DROP] File received:`, files[0].name, files[0].type, files[0].size);
+      handleFileChange(type, files[0]);
+    } else {
+      console.warn(`[DROP] No file found in drop event`);
     }
   };
 
   const handleFileChange = (type: "thumbnail" | "video", file: File | null) => {
+    console.log(`[FILE CHANGE] Type: ${type}, File:`, file?.name || 'null');
+    
     if (file) {
       // Validate file
       const bucket = type === "video" ? STORAGE_BUCKETS.VIDEOS : STORAGE_BUCKETS.THUMBNAILS;
+      console.log(`[VALIDATION] Validating file for bucket:`, bucket);
+      
       const validation = storageUtils.validateFile(file, bucket);
+      console.log(`[VALIDATION] Result:`, validation);
 
       if (!validation.valid) {
+        console.error(`[VALIDATION ERROR]`, validation.error);
         message.error(validation.error);
+        toast.error(validation.error);
         return;
       }
 
       // Create preview
-      const previewUrl = URL.createObjectURL(file);
-      if (type === "thumbnail") {
-        setThumbnailFile(file);
-        setThumbnailPreview(previewUrl);
-      } else {
-        setVideoFile(file);
-        setVideoPreview(previewUrl);
-        setFormData((prev) => ({
-          ...prev,
-          size: file.size.toString(),
-          format: file.name.split(".").pop() || "mp4",
-        }));
+      try {
+        const previewUrl = URL.createObjectURL(file);
+        console.log(`[PREVIEW] Created preview URL:`, previewUrl);
+        
+        if (type === "thumbnail") {
+          setThumbnailFile(file);
+          setThumbnailPreview(previewUrl);
+          console.log(`[STATE] Thumbnail file and preview set`);
+        } else {
+          setVideoFile(file);
+          setVideoPreview(previewUrl);
+          setFormData((prev) => ({
+            ...prev,
+            size: file.size.toString(),
+            format: file.name.split(".").pop() || "mp4",
+          }));
+          console.log(`[STATE] Video file and preview set`);
+        }
+        
+        toast.success(`${type === 'video' ? 'Video' : 'Thumbnail'} selected successfully`);
+      } catch (err) {
+        console.error(`[PREVIEW ERROR] Failed to create preview:`, err);
+        toast.error(`Failed to load ${type} preview`);
       }
     } else {
+      console.log(`[FILE CHANGE] Clearing ${type} file`);
       if (type === "thumbnail") {
         setThumbnailFile(null);
         setThumbnailPreview(formData.thumbnailUrl || null);
@@ -239,9 +261,13 @@ export default function DashboardEditVideo() {
   };
 
   const uploadToSupabase = async (file: File, bucket: string, type: "video" | "thumbnail"): Promise<string> => {
+    console.log(`[UPLOAD START] ${type} - File:`, file.name, `Bucket:`, bucket);
+    
     try {
       const fileExt = file.name.split(".").pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      
+      console.log(`[UPLOAD] Generated filename:`, fileName);
 
       if (type === "video") {
         setUploadingVideo(true);
@@ -251,54 +277,85 @@ export default function DashboardEditVideo() {
         updateUploadStep(2, "in-progress");
       }
 
-      const { error } = await supabase.storage.from(bucket).upload(fileName, file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
+      // Simulate progress for better UX
+      const progressInterval = setInterval(() => {
+        if (type === "video") {
+          setUploadProgress(prev => ({ ...prev, video: Math.min(prev.video + 10, 90) }));
+        } else {
+          setUploadProgress(prev => ({ ...prev, thumbnail: Math.min(prev.thumbnail + 10, 90) }));
+        }
+      }, 500);
 
-      if (error) throw new Error(`Failed to upload ${type}: ${error.message}`);
+      console.log(`[SUPABASE] Starting upload to bucket: ${bucket}`);
+      
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      clearInterval(progressInterval);
+
+      if (error) {
+        console.error(`[SUPABASE ERROR]`, error);
+        throw new Error(`Failed to upload ${type}: ${error.message}`);
+      }
+
+      console.log(`[SUPABASE] Upload successful:`, data);
 
       const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
+      console.log(`[SUPABASE] Public URL generated:`, urlData.publicUrl);
 
       if (type === "video") {
         updateUploadStep(1, "completed");
+        setUploadProgress(prev => ({ ...prev, video: 100 }));
       } else {
         updateUploadStep(2, "completed");
+        setUploadProgress(prev => ({ ...prev, thumbnail: 100 }));
       }
 
+      toast.success(`${type === 'video' ? 'Video' : 'Thumbnail'} uploaded successfully!`);
+      
       return urlData.publicUrl;
     } catch (error) {
-      console.error(`Error uploading ${type}:`, error);
+      console.error(`[UPLOAD ERROR] ${type}:`, error);
       if (type === "video") {
         updateUploadStep(1, "error");
       } else {
         updateUploadStep(2, "error");
       }
+      toast.error(`Failed to upload ${type}`);
       throw error;
     } finally {
       if (type === "video") {
         setUploadingVideo(false);
-        setUploadProgress((prev) => ({ ...prev, video: 100 }));
       } else {
         setUploadingThumbnail(false);
-        setUploadProgress((prev) => ({ ...prev, thumbnail: 100 }));
       }
     }
   };
 
   const handleSubmit = async () => {
+    console.log(`[SUBMIT] Starting submission process`);
+    
     if (!videoId) {
+      console.error(`[SUBMIT ERROR] Invalid video ID`);
       message.error("Invalid video ID");
+      toast.error("Invalid video ID");
       return;
     }
 
     if (!formData.title || !formData.category || !formData.programId) {
+      console.error(`[SUBMIT ERROR] Missing required fields`);
       message.error("Please fill in all required fields");
+      toast.error("Please fill in all required fields");
       setCurrentStep("details");
       return;
     }
 
     setLoading(true);
+    console.log(`[SUBMIT] Loading state set to true`);
 
     try {
       let videoUrl = formData.videoUrl;
@@ -306,27 +363,49 @@ export default function DashboardEditVideo() {
 
       // Upload new video if changed
       if (videoFile) {
+        console.log(`[SUBMIT] Uploading new video file`);
         videoUrl = await uploadToSupabase(videoFile, STORAGE_BUCKETS.VIDEOS, "video");
+        console.log(`[SUBMIT] Video URL received:`, videoUrl);
+      } else {
+        console.log(`[SUBMIT] Using existing video URL`);
       }
 
       // Upload new thumbnail if changed
       if (thumbnailFile) {
+        console.log(`[SUBMIT] Uploading new thumbnail file`);
         thumbnailUrl = await uploadToSupabase(thumbnailFile, STORAGE_BUCKETS.THUMBNAILS, "thumbnail");
+        console.log(`[SUBMIT] Thumbnail URL received:`, thumbnailUrl);
+      } else {
+        console.log(`[SUBMIT] Using existing thumbnail URL`);
       }
 
       // Get video duration if new video uploaded
       updateUploadStep(3, "in-progress");
       let duration = formData.duration;
       if (videoFile) {
+        console.log(`[SUBMIT] Getting video duration`);
         const video = document.createElement("video");
         video.preload = "metadata";
         const getDuration = (): Promise<number> => {
-          return new Promise((resolve) => {
-            video.onloadedmetadata = () => resolve(Math.floor(video.duration));
+          return new Promise((resolve, reject) => {
+            video.onloadedmetadata = () => {
+              console.log(`[DURATION] Video duration:`, video.duration);
+              resolve(Math.floor(video.duration));
+            };
+            video.onerror = () => {
+              console.error(`[DURATION ERROR] Failed to load video metadata`);
+              reject(new Error('Failed to load video metadata'));
+            };
             video.src = URL.createObjectURL(videoFile);
           });
         };
-        duration = (await getDuration()).toString();
+        try {
+          duration = (await getDuration()).toString();
+        } catch (err) {
+          console.error(`[DURATION ERROR]`, err);
+          // Use default duration if we can't get it
+          duration = "0";
+        }
       }
       updateUploadStep(3, "completed");
 
@@ -351,22 +430,32 @@ export default function DashboardEditVideo() {
         thumbnailUrl,
       };
 
+      console.log(`[API] Updating video with data:`, videoData);
+      
       await api.put(`/videos/${videoId}`, videoData);
       updateUploadStep(4, "completed");
       await reload();
 
+      console.log(`[SUBMIT] Success! Navigating to videos list`);
       toast.success("Video updated successfully!");
       navigate("/dashboard/videos");
     } catch (error) {
-      console.error("Failed to update video:", error);
+      console.error("[SUBMIT ERROR] Failed to update video:", error);
       toast.error("Update failed. Please try again.");
+      
+      // Reset upload steps on error
+      setUploadSteps(prev => prev.map(step => 
+        step.status === "in-progress" ? { ...step, status: "error" as const } : step
+      ));
     } finally {
       setLoading(false);
       setUploadProgress({ video: 0, thumbnail: 0 });
+      console.log(`[SUBMIT] Process complete, loading state reset`);
     }
   };
 
   const handleCancel = () => {
+    console.log(`[CANCEL] User cancelled editing`);
     navigate("/dashboard/videos");
   };
 
@@ -785,14 +874,20 @@ export default function DashboardEditVideo() {
                       setDragOver((prev) => ({ ...prev, video: true }));
                     }}
                     onDragLeave={() => setDragOver((prev) => ({ ...prev, video: false }))}
-                    onClick={() => videoInputRef.current?.click()}
+                    onClick={() => {
+                      console.log('[CLICK] Video upload area clicked');
+                      videoInputRef.current?.click();
+                    }}
                   >
                     <input
                       ref={videoInputRef}
                       type="file"
                       accept="video/*"
                       className="hidden"
-                      onChange={(e) => handleFileChange("video", e.target.files?.[0] || null)}
+                      onChange={(e) => {
+                        console.log('[INPUT CHANGE] Video file input changed');
+                        handleFileChange("video", e.target.files?.[0] || null);
+                      }}
                       disabled={isUploading}
                     />
 
@@ -847,6 +942,7 @@ export default function DashboardEditVideo() {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
+                        console.log('[REMOVE] Removing video file');
                         handleFileChange("video", null);
                       }}
                       disabled={isUploading}
@@ -887,14 +983,20 @@ export default function DashboardEditVideo() {
                       setDragOver((prev) => ({ ...prev, thumbnail: true }));
                     }}
                     onDragLeave={() => setDragOver((prev) => ({ ...prev, thumbnail: false }))}
-                    onClick={() => thumbnailInputRef.current?.click()}
+                    onClick={() => {
+                      console.log('[CLICK] Thumbnail upload area clicked');
+                      thumbnailInputRef.current?.click();
+                    }}
                   >
                     <input
                       ref={thumbnailInputRef}
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => handleFileChange("thumbnail", e.target.files?.[0] || null)}
+                      onChange={(e) => {
+                        console.log('[INPUT CHANGE] Thumbnail file input changed');
+                        handleFileChange("thumbnail", e.target.files?.[0] || null);
+                      }}
                       disabled={isUploading}
                     />
 
@@ -949,6 +1051,7 @@ export default function DashboardEditVideo() {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
+                        console.log('[REMOVE] Removing thumbnail file');
                         handleFileChange("thumbnail", null);
                       }}
                       disabled={isUploading}
@@ -981,7 +1084,7 @@ export default function DashboardEditVideo() {
             </div>
           </TabsContent>
 
-          {/* Review Tab */}
+          {/* Review Tab - Same as before, no changes needed */}
           <TabsContent value="review" className="space-y-6">
             <Card>
               <CardHeader>
