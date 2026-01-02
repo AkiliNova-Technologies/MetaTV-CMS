@@ -10,7 +10,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Create Supabase client for frontend
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Storage bucket names
+// Storage bucket names - All pointing to same bucket is fine!
 export const STORAGE_BUCKETS = {
   VIDEOS: import.meta.env.VITE_SUPABASE_BUCKET,
   THUMBNAILS: import.meta.env.VITE_SUPABASE_BUCKET,
@@ -145,52 +145,69 @@ export const storageUtils = {
   },
 
   /**
-   * Get file size validation limits
+   * Get file size validation limits based on file type
    */
-  getFileSizeLimit: (bucket: string): number => {
-    switch (bucket) {
-      case STORAGE_BUCKETS.VIDEOS:
-        return 5 * 1024 * 1024 * 1024; // 5GB
-      case STORAGE_BUCKETS.MUSIC:
-        return 100 * 1024 * 1024; // 100MB
-      case STORAGE_BUCKETS.THUMBNAILS:
-      case STORAGE_BUCKETS.LIVESTREAM_THUMBNAILS:
-        return 10 * 1024 * 1024; // 10MB
-      default:
-        return 10 * 1024 * 1024; // 10MB default
+  getFileSizeLimit: (file: File): number => {
+    const type = file.type.toLowerCase();
+    
+    // Video files
+    if (type.startsWith('video/')) {
+      return 5 * 1024 * 1024 * 1024; // 5GB
+    }
+    // Audio files
+    else if (type.startsWith('audio/')) {
+      return 100 * 1024 * 1024; // 100MB
+    }
+    // Image files
+    else if (type.startsWith('image/')) {
+      return 10 * 1024 * 1024; // 10MB
+    }
+    // Default
+    else {
+      return 10 * 1024 * 1024; // 10MB
     }
   },
 
   /**
-   * Validate file before upload
+   * Validate file before upload - FIXED FOR SINGLE BUCKET
+   * When using a single bucket, we validate based on FILE TYPE, not bucket name
    */
-  validateFile: (file: File, bucket: string): { valid: boolean; error?: string } => {
-    const maxSize = storageUtils.getFileSizeLimit(bucket);
+  validateFile: (file: File, _bucket: string): { valid: boolean; error?: string } => {
+    console.log('[VALIDATE] Checking file:', file.name, 'type:', file.type, 'size:', file.size);
+    
+    // Check file size based on file type
+    const maxSize = storageUtils.getFileSizeLimit(file);
     
     if (file.size > maxSize) {
-      const maxSizeMB = Math.round(maxSize / (1024 * 1024));
+      const maxSizeMB = maxSize >= 1024 * 1024 * 1024 
+        ? `${Math.round(maxSize / (1024 * 1024 * 1024))}GB`
+        : `${Math.round(maxSize / (1024 * 1024))}MB`;
+      const errorMsg = `File size exceeds ${maxSizeMB} limit`;
+      console.error('[VALIDATE ERROR]', errorMsg);
       return {
         valid: false,
-        error: `File size exceeds ${maxSizeMB}MB limit`
+        error: errorMsg
       };
     }
 
-    // Validate file types
-    const allowedTypes: Record<string, string[]> = {
-      [STORAGE_BUCKETS.VIDEOS]: ['video/mp4', 'video/mov', 'video/avi'],
-      [STORAGE_BUCKETS.THUMBNAILS]: ['image/jpeg', 'image/png', 'image/webp'],
-      [STORAGE_BUCKETS.LIVESTREAM_THUMBNAILS]: ['image/jpeg', 'image/png', 'image/webp'],
-      [STORAGE_BUCKETS.MUSIC]: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/flac']
-    };
-
-    const allowed = allowedTypes[bucket];
-    if (allowed && !allowed.includes(file.type)) {
+    // Basic file type validation (just check if it's a valid media type)
+    const type = file.type.toLowerCase();
+    const validTypes = [
+      'video/', 'image/', 'audio/'  // Allow any video, image, or audio
+    ];
+    
+    const isValidType = validTypes.some(validType => type.startsWith(validType));
+    
+    if (!isValidType) {
+      const errorMsg = `Invalid file type: ${file.type}. Please upload a video, image, or audio file.`;
+      console.error('[VALIDATE ERROR]', errorMsg);
       return {
         valid: false,
-        error: `Invalid file type. Allowed types: ${allowed.join(', ')}`
+        error: errorMsg
       };
     }
 
+    console.log('[VALIDATE] ✅ File validation passed!');
     return { valid: true };
   }
 };

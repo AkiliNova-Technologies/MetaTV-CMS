@@ -46,6 +46,7 @@ import { IconX } from "@tabler/icons-react";
 import { supabase, STORAGE_BUCKETS, storageUtils } from "@/config/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
 
 interface FormData {
   title: string;
@@ -146,6 +147,7 @@ export default function DashboardAddVideo() {
   });
 
   const updateUploadStep = (stepId: number, status: UploadStep["status"]) => {
+    console.log(`[UPLOAD STEP] Step ${stepId} status: ${status}`);
     setUploadSteps((prev) =>
       prev.map((step) => (step.id === stepId ? { ...step, status } : step))
     );
@@ -155,6 +157,7 @@ export default function DashboardAddVideo() {
     field: keyof FormData,
     value: string | boolean | File | null
   ) => {
+    console.log(`[INPUT CHANGE] Field: ${field}, Value:`, value);
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -163,15 +166,21 @@ export default function DashboardAddVideo() {
 
   const handleDrop = (e: React.DragEvent, type: "thumbnail" | "video") => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOver((prev) => ({ ...prev, [type]: false }));
 
+    console.log(`[DROP] File dropped for ${type}`);
+    
     const files = e.dataTransfer.files;
     if (files && files[0]) {
+      console.log(`[DROP] File received:`, files[0].name, files[0].type, files[0].size);
       if (type === "thumbnail") {
         handleFileChange("thumbnailFile", files[0]);
       } else if (type === "video") {
         handleFileChange("videoFile", files[0]);
       }
+    } else {
+      console.warn(`[DROP] No file found in drop event`);
     }
   };
 
@@ -179,39 +188,58 @@ export default function DashboardAddVideo() {
     field: "thumbnailFile" | "videoFile",
     file: File | null
   ) => {
+    console.log(`[FILE CHANGE] Field: ${field}, File:`, file?.name || 'null');
+    
     if (file) {
       // Validate file
       const bucket =
         field === "videoFile"
           ? STORAGE_BUCKETS.VIDEOS
           : STORAGE_BUCKETS.THUMBNAILS;
+      
+      console.log(`[VALIDATION] Validating file for bucket:`, bucket);
       const validation = storageUtils.validateFile(file, bucket);
+      console.log(`[VALIDATION] Result:`, validation);
 
       if (!validation.valid) {
+        console.error(`[VALIDATION ERROR]`, validation.error);
         message.error(validation.error);
+        toast.error(validation.error);
         return;
       }
 
       // Create preview
-      const previewUrl = URL.createObjectURL(file);
-      if (field === "thumbnailFile") {
-        setThumbnailPreview(previewUrl);
-      } else {
-        setVideoPreview(previewUrl);
-      }
+      try {
+        const previewUrl = URL.createObjectURL(file);
+        console.log(`[PREVIEW] Created preview URL:`, previewUrl);
+        
+        if (field === "thumbnailFile") {
+          setThumbnailPreview(previewUrl);
+        } else {
+          setVideoPreview(previewUrl);
+        }
 
-      // Update file size and format
-      if (field === "videoFile") {
-        setFormData((prev) => ({
-          ...prev,
-          [field]: file,
-          size: file.size.toString(),
-          format: file.name.split(".").pop() || "mp4",
-        }));
-      } else {
-        setFormData((prev) => ({ ...prev, [field]: file }));
+        // Update file size and format
+        if (field === "videoFile") {
+          setFormData((prev) => ({
+            ...prev,
+            [field]: file,
+            size: file.size.toString(),
+            format: file.name.split(".").pop() || "mp4",
+          }));
+          console.log(`[STATE] Video file set, size: ${file.size}, format: ${file.name.split(".").pop()}`);
+        } else {
+          setFormData((prev) => ({ ...prev, [field]: file }));
+          console.log(`[STATE] Thumbnail file set`);
+        }
+        
+        toast.success(`${field === 'videoFile' ? 'Video' : 'Thumbnail'} selected successfully`);
+      } catch (err) {
+        console.error(`[PREVIEW ERROR] Failed to create preview:`, err);
+        toast.error(`Failed to load ${field === 'videoFile' ? 'video' : 'thumbnail'} preview`);
       }
     } else {
+      console.log(`[FILE CHANGE] Clearing ${field}`);
       if (field === "thumbnailFile") {
         setThumbnailPreview(null);
       } else {
@@ -234,11 +262,15 @@ export default function DashboardAddVideo() {
     bucket: string,
     type: "video" | "thumbnail"
   ): Promise<string> => {
+    console.log(`[UPLOAD START] ${type} - File:`, file.name, `Bucket:`, bucket);
+    
     try {
       const fileExt = file.name.split(".").pop();
       const fileName = `${Date.now()}-${Math.random()
         .toString(36)
         .substring(7)}.${fileExt}`;
+      
+      console.log(`[UPLOAD] Generated filename:`, fileName);
 
       if (type === "video") {
         setUploadingVideo(true);
@@ -248,133 +280,196 @@ export default function DashboardAddVideo() {
         updateUploadStep(2, "in-progress");
       }
 
+      // Simulate progress for better UX
+      const progressInterval = setInterval(() => {
+        if (type === "video") {
+          setUploadProgress(prev => ({ ...prev, video: Math.min(prev.video + 10, 90) }));
+        } else {
+          setUploadProgress(prev => ({ ...prev, thumbnail: Math.min(prev.thumbnail + 10, 90) }));
+        }
+      }, 500);
+
+      console.log(`[SUPABASE] Starting upload to bucket: ${bucket}`);
+
       // Upload file to Supabase
-      const { error } = await supabase.storage
+      const { data, error } = await supabase.storage
         .from(bucket)
         .upload(fileName, file, {
           cacheControl: "3600",
           upsert: false,
         });
 
+      clearInterval(progressInterval);
+
       if (error) {
+        console.error(`[SUPABASE ERROR]`, error);
         throw new Error(`Failed to upload ${type}: ${error.message}`);
       }
+
+      console.log(`[SUPABASE] Upload successful:`, data);
 
       // Get public URL
       const { data: urlData } = supabase.storage
         .from(bucket)
         .getPublicUrl(fileName);
+      
+      console.log(`[SUPABASE] Public URL generated:`, urlData.publicUrl);
 
       if (type === "video") {
         updateUploadStep(1, "completed");
+        setUploadProgress(prev => ({ ...prev, video: 100 }));
       } else {
         updateUploadStep(2, "completed");
+        setUploadProgress(prev => ({ ...prev, thumbnail: 100 }));
       }
+
+      toast.success(`${type === 'video' ? 'Video' : 'Thumbnail'} uploaded successfully!`);
 
       return urlData.publicUrl;
     } catch (error) {
-      console.error(`Error uploading ${type}:`, error);
+      console.error(`[UPLOAD ERROR] ${type}:`, error);
       if (type === "video") {
         updateUploadStep(1, "error");
       } else {
         updateUploadStep(2, "error");
       }
+      toast.error(`Failed to upload ${type}`);
       throw error;
     } finally {
       if (type === "video") {
         setUploadingVideo(false);
-        setUploadProgress((prev) => ({ ...prev, video: 100 }));
       } else {
         setUploadingThumbnail(false);
-        setUploadProgress((prev) => ({ ...prev, thumbnail: 100 }));
       }
     }
   };
 
   const handleSubmit = async () => {
+    console.log(`[SUBMIT] Starting submission process`);
+    
     if (!formData.videoFile || !formData.thumbnailFile) {
+      console.error(`[SUBMIT ERROR] Missing files - Video: ${!!formData.videoFile}, Thumbnail: ${!!formData.thumbnailFile}`);
       message.error("Please select both a video and thumbnail file");
+      toast.error("Please select both a video and thumbnail file");
       return;
     }
 
     if (!formData.title || !formData.category || !formData.programId) {
+      console.error(`[SUBMIT ERROR] Missing required fields`);
       message.error("Please fill in all required fields");
+      toast.error("Please fill in all required fields");
       setCurrentStep("details");
       return;
     }
 
     setLoading(true);
+    console.log(`[SUBMIT] Loading state set to true`);
 
     try {
       // Upload video to Supabase
+      console.log(`[SUBMIT] Uploading video file`);
       const videoUrl = await uploadToSupabase(
         formData.videoFile,
         STORAGE_BUCKETS.VIDEOS,
         "video"
       );
+      console.log(`[SUBMIT] Video URL received:`, videoUrl);
 
       // Upload thumbnail to Supabase
+      console.log(`[SUBMIT] Uploading thumbnail file`);
       const thumbnailUrl = await uploadToSupabase(
         formData.thumbnailFile,
         STORAGE_BUCKETS.THUMBNAILS,
         "thumbnail"
       );
+      console.log(`[SUBMIT] Thumbnail URL received:`, thumbnailUrl);
 
       // Get video metadata
       updateUploadStep(3, "in-progress");
+      console.log(`[SUBMIT] Getting video duration`);
       const video = document.createElement("video");
       video.preload = "metadata";
 
       const getVideoDuration = (): Promise<number> => {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
           video.onloadedmetadata = () => {
+            console.log(`[DURATION] Video duration:`, video.duration);
             resolve(Math.floor(video.duration));
+          };
+          video.onerror = () => {
+            console.error(`[DURATION ERROR] Failed to load video metadata`);
+            reject(new Error('Failed to load video metadata'));
           };
           video.src = URL.createObjectURL(formData.videoFile!);
         });
       };
 
-      const duration = await getVideoDuration();
+      let duration;
+      try {
+        duration = await getVideoDuration();
+      } catch (err) {
+        console.error(`[DURATION ERROR]`, err);
+        duration = 0; // Use default if we can't get it
+      }
       updateUploadStep(3, "completed");
 
       // Send video data to backend
       updateUploadStep(4, "in-progress");
+      
+      // Split tags into array and filter empty strings
+      const tagsArray = formData.tags
+        .split(",")
+        .map(t => t.trim())
+        .filter(Boolean);
+      
       const videoData = {
         title: formData.title,
-        category: formData.category.toUpperCase(),
+        category: [formData.category.toUpperCase()], // Send as array for consistency
         description: formData.description,
-        tags: formData.tags,
+        tags: tagsArray, // Send as array
         isFeatured: formData.isFeatured,
         allowComments: formData.allowComments,
         visibility: formData.visibility,
         monetization: formData.monetization,
-        duration: duration.toString(),
-        resolution: formData.resolution,
-        size: formData.size,
+        duration: parseInt(duration.toString()),
+        resolution: formData.resolution === "4K" ? "FOUR_K" : formData.resolution,
+        size: parseInt(formData.size),
         format: formData.format,
         codec: formData.codec,
-        programId: formData.programId,
+        programId: parseInt(formData.programId),
         uploadedById: user!.id,
         videoUrl,
         thumbnailUrl,
       };
 
+      console.log(`[API] Sending video data to backend:`, videoData);
+
       await api.post("/videos", videoData);
       updateUploadStep(4, "completed");
       await reload();
 
+      console.log(`[SUBMIT] Success! Navigating to videos list`);
       message.success("Video uploaded successfully!");
+      toast.success("Video uploaded successfully!");
       navigate("/dashboard/videos");
     } catch (error) {
-      console.error("Upload error:", error);
+      console.error("[SUBMIT ERROR] Upload failed:", error);
       message.error("Upload failed. Please try again.");
+      toast.error("Upload failed. Please try again.");
+      
+      // Reset upload steps on error
+      setUploadSteps(prev => prev.map(step => 
+        step.status === "in-progress" ? { ...step, status: "error" as const } : step
+      ));
     } finally {
       setLoading(false);
       setUploadProgress({ video: 0, thumbnail: 0 });
+      console.log(`[SUBMIT] Process complete, loading state reset`);
     }
   };
 
   const handleCancel = () => {
+    console.log(`[CANCEL] User cancelled upload`);
     navigate("/dashboard/videos");
   };
 
@@ -388,7 +483,7 @@ export default function DashboardAddVideo() {
 
   return (
     <div className="min-h-screen ">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Header */}
         <div className="mb-8">
           <Button
@@ -529,19 +624,23 @@ export default function DashboardAddVideo() {
                     onDragLeave={() =>
                       setDragOver((prev) => ({ ...prev, video: false }))
                     }
-                    onClick={() => videoInputRef.current?.click()}
+                    onClick={() => {
+                      console.log('[CLICK] Video upload area clicked');
+                      videoInputRef.current?.click();
+                    }}
                   >
                     <input
                       ref={videoInputRef}
                       type="file"
                       accept="video/*"
                       className="hidden"
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        console.log('[INPUT CHANGE] Video file input changed');
                         handleFileChange(
                           "videoFile",
                           e.target.files?.[0] || null
-                        )
-                      }
+                        );
+                      }}
                       disabled={isUploading}
                     />
 
@@ -593,6 +692,7 @@ export default function DashboardAddVideo() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
+                          console.log('[REMOVE] Removing video file');
                           handleFileChange("videoFile", null);
                         }}
                         disabled={isUploading}
@@ -636,19 +736,23 @@ export default function DashboardAddVideo() {
                     onDragLeave={() =>
                       setDragOver((prev) => ({ ...prev, thumbnail: false }))
                     }
-                    onClick={() => thumbnailInputRef.current?.click()}
+                    onClick={() => {
+                      console.log('[CLICK] Thumbnail upload area clicked');
+                      thumbnailInputRef.current?.click();
+                    }}
                   >
                     <input
                       ref={thumbnailInputRef}
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        console.log('[INPUT CHANGE] Thumbnail file input changed');
                         handleFileChange(
                           "thumbnailFile",
                           e.target.files?.[0] || null
-                        )
-                      }
+                        );
+                      }}
                       disabled={isUploading}
                     />
 
@@ -700,6 +804,7 @@ export default function DashboardAddVideo() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
+                          console.log('[REMOVE] Removing thumbnail file');
                           handleFileChange("thumbnailFile", null);
                         }}
                         disabled={isUploading}
@@ -738,7 +843,7 @@ export default function DashboardAddVideo() {
             )}
           </TabsContent>
 
-          {/* Details Tab */}
+          {/* Details Tab - Same as original, no changes needed */}
           <TabsContent value="details" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Main Form */}
@@ -1067,7 +1172,7 @@ export default function DashboardAddVideo() {
             </div>
           </TabsContent>
 
-          {/* Review Tab */}
+          {/* Review Tab - Same as original, no changes needed */}
           <TabsContent value="review" className="space-y-6">
             <Card>
               <CardHeader>
