@@ -413,9 +413,9 @@ export default function DashboardEditVideo() {
       updateUploadStep(4, "in-progress");
       const videoData = {
         title: formData.title,
-        category: [formData.category.toUpperCase()],
+        category: formData.category.toUpperCase(), // Backend expects string, converts to array internally
         description: formData.description,
-        tags: formData.tags.split(",").map(t => t.trim()).filter(Boolean),
+        tags: formData.tags, // Send as comma-separated string - backend will split it
         allowComments: formData.allowComments,
         visibility: formData.visibility,
         duration: parseInt(duration),

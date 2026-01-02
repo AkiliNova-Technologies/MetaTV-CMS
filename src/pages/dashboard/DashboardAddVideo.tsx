@@ -416,17 +416,11 @@ export default function DashboardAddVideo() {
       // Send video data to backend
       updateUploadStep(4, "in-progress");
       
-      // Split tags into array and filter empty strings
-      const tagsArray = formData.tags
-        .split(",")
-        .map(t => t.trim())
-        .filter(Boolean);
-      
       const videoData = {
         title: formData.title,
-        category: [formData.category.toUpperCase()], // Send as array for consistency
+        category: formData.category.toUpperCase(), // Backend expects string, converts to array internally
         description: formData.description,
-        tags: tagsArray, // Send as array
+        tags: formData.tags, // Send as comma-separated string - backend will split it
         isFeatured: formData.isFeatured,
         allowComments: formData.allowComments,
         visibility: formData.visibility,
@@ -443,6 +437,7 @@ export default function DashboardAddVideo() {
       };
 
       console.log(`[API] Sending video data to backend:`, videoData);
+      console.log(`[API] Tags:`, formData.tags);
 
       await api.post("/videos", videoData);
       updateUploadStep(4, "completed");
@@ -483,7 +478,7 @@ export default function DashboardAddVideo() {
 
   return (
     <div className="min-h-screen ">
-      <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Header */}
         <div className="mb-8">
           <Button
