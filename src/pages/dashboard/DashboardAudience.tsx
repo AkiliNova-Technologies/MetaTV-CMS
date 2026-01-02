@@ -1,10 +1,10 @@
 import { useReduxUsers } from "@/hooks/useReduxUsers";
-import { TeamTable } from "@/components/team-table";
 import React from "react";
 import {
   TeamSectionCards,
   type CardData,
 } from "@/components/team-section-cards";
+import { UserTable } from "@/components/audience-table";
 
 export default function DashboardAudience() {
   const { users } = useReduxUsers();
@@ -111,7 +111,7 @@ export default function DashboardAudience() {
             <TeamSectionCards cards={cards} layout="auto" />
           </div>
 
-          <TeamTable team={teamData} />
+          <UserTable user={teamData} />
         </div>
       </div>
     </div>

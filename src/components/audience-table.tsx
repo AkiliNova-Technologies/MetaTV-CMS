@@ -89,7 +89,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Controller, useForm } from "react-hook-form";
-import { teamSchema } from "@/constants/Constants";
+import { userSchema } from "@/constants/Constants";
 import api from "@/utils/api";
 import { useReduxUsers } from "@/hooks/useReduxUsers";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
@@ -143,7 +143,7 @@ function DragHandle({ id }: { id: number }) {
 }
 
 // Draggable Row Component
-function DraggableRow({ row }: { row: Row<z.infer<typeof teamSchema>> }) {
+function DraggableRow({ row }: { row: Row<z.infer<typeof userSchema>> }) {
   const { transform, transition, setNodeRef, isDragging } = useSortable({
     id: row.original.id,
   });
@@ -168,14 +168,14 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof teamSchema>> }) {
   );
 }
 
-// Enhanced Team Card Component
-function TeamCard({
+// Enhanced User Card Component
+function UserCard({
   member,
   onEdit,
   onDelete,
 }: {
-  member: z.infer<typeof teamSchema>;
-  onEdit: (member: z.infer<typeof teamSchema>) => void;
+  member: z.infer<typeof userSchema>;
+  onEdit: (member: z.infer<typeof userSchema>) => void;
   onDelete: (userId: number) => void;
 }) {
   const lastLogin = member.lastLogin
@@ -315,14 +315,14 @@ function TeamCard({
   );
 }
 
-type UserFormData = z.infer<typeof teamSchema>;
+type UserFormData = z.infer<typeof userSchema>;
 
 // Delete Dialog Component
 function DeleteMemberDialog({
   user,
   onDelete,
 }: {
-  user: z.infer<typeof teamSchema>;
+  user: z.infer<typeof userSchema>;
   onDelete: (userId: number) => void;
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -362,7 +362,7 @@ function DeleteMemberDialog({
             <div className="size-10 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
               <IconAlertCircle className="size-5 text-red-600" />
             </div>
-            Delete Team Member?
+            Delete User Member?
           </AlertDialogTitle>
           <AlertDialogDescription className="text-base pt-2">
             Are you sure you want to delete{" "}
@@ -419,7 +419,6 @@ export function AddMemberDrawer({
 
   const {
     register,
-    control,
     handleSubmit,
     formState: { errors },
     reset,
@@ -469,10 +468,10 @@ export function AddMemberDrawer({
             <div className="size-12 rounded-xl bg-input flex items-center justify-center">
               <IconUser className="size-5 text-white" />
             </div>
-            Add New Team Member
+            Add New User Member
           </SheetTitle>
           <SheetDescription>
-            Add a new member to your team with their details and role assignment
+            Add a new member to your user with their details and role assignment
           </SheetDescription>
         </SheetHeader>
 
@@ -554,57 +553,6 @@ export function AddMemberDrawer({
             </CardContent>
           </Card>
 
-          {/* Role Assignment */}
-          <Card>
-            <CardHeader>
-              <h3 className="text-base font-semibold">Role Assignment</h3>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Label htmlFor="role">Role *</Label>
-                <Controller
-                  name="role"
-                  control={control}
-                  rules={{ required: "Role is required" }}
-                  render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ADMIN">
-                          <div className="flex items-center gap-2">
-                            <Shield className="size-4" />
-                            Admin
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="MODERATOR">
-                          <div className="flex items-center gap-2">
-                            <UserCheck className="size-4" />
-                            Moderator
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="CREATOR">
-                          <div className="flex items-center gap-2">
-                            <Users className="size-4" />
-                            Creator
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                {errors.role && (
-                  <p className="text-red-500 text-xs">{errors.role.message}</p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Default password will be: firstname + lastname (lowercase, no
-                  spaces)
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t">
             <Button
@@ -627,9 +575,9 @@ export function AddMemberDrawer({
 }
 
 // Main Table Component
-export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
+export function UserTable({ user }: { user: z.infer<typeof userSchema>[] }) {
   const { loading, reload: membersReload } = useReduxUsers();
-  const [data, setData] = React.useState<z.infer<typeof teamSchema>[]>(team);
+  const [data, setData] = React.useState<z.infer<typeof userSchema>[]>(user);
   const [viewMode, setViewMode] = React.useState<"table" | "card">("card");
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] =
@@ -644,7 +592,7 @@ export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
     pageSize: 12,
   });
   const [editingMember, setEditingMember] = React.useState<z.infer<
-    typeof teamSchema
+    typeof userSchema
   > | null>(null);
 
   const sortableId = React.useId();
@@ -655,16 +603,16 @@ export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
   );
 
   React.useEffect(() => {
-    setData(team);
-  }, [team]);
+    setData(user);
+  }, [user]);
 
   React.useMemo(() => {
-    if (!team.length) {
+    if (!user.length) {
       membersReload();
     }
-  }, [team.length, membersReload]);
+  }, [user.length, membersReload]);
 
-  const dataIds = React.useMemo(() => team.map(({ id }) => id), [team]);
+  const dataIds = React.useMemo(() => user.map(({ id }) => id), [user]);
 
   const handleAddMember = (newMember: UserFormData) => {
     setData((prev) => [...prev, newMember]);
@@ -699,7 +647,7 @@ export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
     );
   }, [data, globalFilter]);
 
-  const columns = React.useMemo<ColumnDef<z.infer<typeof teamSchema>>[]>(
+  const columns = React.useMemo<ColumnDef<z.infer<typeof userSchema>>[]>(
     () => [
       {
         id: "drag",
@@ -1065,7 +1013,7 @@ export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
                           <p className="text-sm text-muted-foreground">
                             {globalFilter
                               ? "Try adjusting your search"
-                              : "Add your first team member to get started"}
+                              : "Add your first user member to get started"}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1170,7 +1118,7 @@ export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
         ) : filteredData.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredData.map((member) => (
-              <TeamCard
+              <UserCard
                 key={member.id}
                 member={member}
                 onEdit={setEditingMember}
@@ -1190,13 +1138,13 @@ export function TeamTable({ team }: { team: z.infer<typeof teamSchema>[] }) {
             </div>
 
             <h3 className="text-xl font-semibold mb-2">
-              {globalFilter ? "No members found" : "No team members yet"}
+              {globalFilter ? "No members found" : "No user members yet"}
             </h3>
 
             <p className="text-muted-foreground mb-6 max-w-sm">
               {globalFilter
                 ? "Try adjusting your search terms or clear the filter"
-                : "Start building your team by adding your first member"}
+                : "Start building your user by adding your first member"}
             </p>
 
             <div className="flex items-center gap-3">
@@ -1235,7 +1183,7 @@ function TableCellViewer({
   isOpen,
   onClose,
 }: {
-  user: z.infer<typeof teamSchema>;
+  user: z.infer<typeof userSchema>;
   onUpdateMember: (user: UserFormData & { id: number }) => void;
   isOpen?: boolean;
   onClose?: () => void;
@@ -1398,47 +1346,9 @@ function TableCellViewer({
           {/* Role & Status */}
           <Card>
             <CardHeader>
-              <h3 className="text-base font-semibold">Role & Status</h3>
+              <h3 className="text-base font-semibold">User Status</h3>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="role">Role *</Label>
-                <Controller
-                  name="role"
-                  control={control}
-                  rules={{ required: "Role is required" }}
-                  render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ADMIN">
-                          <div className="flex items-center gap-2">
-                            <Shield className="size-4" />
-                            Admin
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="MODERATOR">
-                          <div className="flex items-center gap-2">
-                            <UserCheck className="size-4" />
-                            Moderator
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="CREATOR">
-                          <div className="flex items-center gap-2">
-                            <Users className="size-4" />
-                            Creator
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                {errors.role && (
-                  <p className="text-red-500 text-xs">{errors.role.message}</p>
-                )}
-              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="status">Status *</Label>
@@ -1448,7 +1358,7 @@ function TableCellViewer({
                   render={({ field }) => (
                     <Select onValueChange={field.onChange} value={field.value}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select status" />
+                        <SelectValue placeholder="Select status" defaultValue={user.status}/>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ACTIVE">
